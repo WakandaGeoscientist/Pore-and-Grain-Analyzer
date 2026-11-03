@@ -31,15 +31,8 @@ Running it
 
 Open index.html in any modern browser (Chrome, Edge, Firefox or Safari). It works offline except for the web fonts, which fall back to system fonts.
 
-Publishing with GitHub Pages
 
-	1.	Create a new repository on GitHub (for example thin-section-analyser).
-	2.	Upload index.html, README.md and .nojekyll to the root of the repository: choose Add file → Upload files, drag the files in, then Commit changes.
-	3.	Go to Settings → Pages.
-	4.	Under Build and deployment, set Source to Deploy from a branch, choose the main branch and the / (root) folder, then Save.
-	5.	After a minute or two the site is live at https://<your-username>.github.io/<repository-name>/. The address is shown at the top of the Pages settings.
 
-To update the app later, upload a new index.html over the old one and commit; Pages redeploys automatically.
 
 Limits
 

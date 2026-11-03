@@ -1,0 +1,1769 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Thin Section Porosity & Grain Analyser</title>
+<meta name="description" content="Browser-based porosity, grain segmentation and grain-size analysis for thin-section photomicrographs. Images never leave your device.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔬</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Instrument+Serif&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#e9eef0; --surface:#ffffff; --surface-2:#f3f6f7; --ink:#18232a; --muted:#5b6a72;
+  --line:#d3dce0; --epoxy:#1f5fbf; --epoxy-ink:#ffffff; --pore:#d6247f; --grain:#d9a400; --grain-ink:#a77a00; --solid:#c9b99a; --other:#8a9aa2; --matrix:#1fa36b;
+  --stage:#0f1417; --warn-bg:#fff4d6; --warn-ink:#6b4e00; --ok:#2f7d4f;
+  color-scheme:light; box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#11171a; --surface:#182126; --surface-2:#1f2a30; --ink:#e4ebee; --muted:#93a3ab;
+    --line:#2c3a41; --epoxy:#5b93ec; --epoxy-ink:#0c1420; --pore:#f0559e; --grain:#f2c200; --grain-ink:#f2c200; --solid:#a8987a; --other:#6d7d85; --matrix:#3cc98a;
+    --stage:#05080a; --warn-bg:#3a3010; --warn-ink:#f3dc9a; --ok:#5fc48a; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#11171a; --surface:#182126; --surface-2:#1f2a30; --ink:#e4ebee; --muted:#93a3ab;
+  --line:#2c3a41; --epoxy:#5b93ec; --epoxy-ink:#0c1420; --pore:#f0559e; --grain:#f2c200; --grain-ink:#f2c200; --solid:#a8987a; --other:#6d7d85; --matrix:#3cc98a;
+  --stage:#05080a; --warn-bg:#3a3010; --warn-ink:#f3dc9a; --ok:#5fc48a; color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Instrument Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1380px;margin:0 auto;padding:14px 14px 40px}
+header{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 18px;margin-bottom:10px}
+h1{font-family:"Instrument Serif",Georgia,"Times New Roman",serif;font-weight:400;font-size:clamp(26px,4.4vw,38px);line-height:1.05;margin:0;letter-spacing:-.01em}
+header p{margin:0;color:var(--muted);max-width:70ch;font-size:14px}
+/* stepper */
+.stepper{list-style:none;margin:0 0 12px;padding:0;display:flex;gap:6px;overflow-x:auto;scrollbar-width:none}
+.stepper::-webkit-scrollbar{display:none}
+.stepper li{flex:1 0 auto}
+.stepper button{width:100%;justify-content:flex-start;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:7px 12px 7px 8px;text-align:left;min-height:52px}
+.stepper .num{width:28px;height:28px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;border:1.5px solid var(--muted);color:var(--muted);flex:none;font-variant-numeric:tabular-nums}
+.stepper .t{display:flex;flex-direction:column;line-height:1.2}
+.stepper .t b{font-weight:600;font-size:14px}
+.stepper .t small{font-size:12px;color:var(--muted)}
+.stepper button[aria-current="step"]{border-color:var(--epoxy);box-shadow:inset 0 0 0 1px var(--epoxy)}
+.stepper button[aria-current="step"] .num{background:var(--epoxy);border-color:var(--epoxy);color:var(--epoxy-ink)}
+.stepper button.done .num{background:var(--ok);border-color:var(--ok);color:#fff}
+.layout{display:grid;gap:14px;grid-template-columns:minmax(0,1fr)}
+@media (min-width:980px){.layout{grid-template-columns:minmax(0,1fr) 400px}.viewer{position:sticky;top:calc(env(safe-area-inset-top,0px) + 10px);align-self:start}}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px}
+.panel + .panel{margin-top:12px}
+h2{font-size:17px;font-weight:600;margin:0 0 6px}
+h3{font-size:14px;font-weight:600;margin:16px 0 6px}
+.lead{margin:0 0 10px;color:var(--muted);font-size:14px}
+button,.btn{font:inherit;font-size:14px;font-weight:500;border:1px solid var(--line);background:var(--surface-2);color:var(--ink);border-radius:9px;padding:6px 11px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:36px;position:relative}
+button:hover,.btn:hover{border-color:var(--muted)}
+button:disabled{opacity:.45;cursor:not-allowed}
+button.primary,.btn.primary{background:var(--epoxy);color:var(--epoxy-ink);border-color:var(--epoxy)}
+button:focus-visible,.btn:focus-within,input:focus-visible,select:focus-visible{outline:2px solid var(--epoxy);outline-offset:2px}
+.btn input{position:absolute;width:1px;height:1px;opacity:0}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.spacer{flex:1}
+.tools{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 6px}
+.tools button{min-height:34px;padding:5px 10px}
+.tools button[aria-pressed="true"]{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+.toolhint{font-size:13px;color:var(--muted);margin:0 0 8px;min-height:20px}
+.stage{position:relative;background:var(--stage);border-radius:10px;overflow:hidden;height:clamp(320px,58vh,760px)}
+.stage.drag{outline:3px dashed var(--epoxy);outline-offset:-6px}
+#vc{display:block;width:100%;height:100%;touch-action:none;cursor:crosshair}
+.zoom{position:absolute;right:10px;bottom:10px;display:flex;flex-direction:column;gap:6px}
+.zoom button{width:38px;height:38px;min-height:0;padding:0;background:rgba(15,20,23,.78);color:#fff;border-color:rgba(255,255,255,.25);font-size:18px}
+.zoom button.txt{font-size:12px}
+.chip{position:absolute;left:10px;top:10px;background:rgba(15,20,23,.8);color:#fff;font-size:13px;padding:4px 10px;border-radius:8px;display:flex;gap:12px;font-variant-numeric:tabular-nums;pointer-events:none}
+.chip b{font-weight:600}
+.hlchip{position:absolute;left:10px;top:44px;background:rgba(15,20,23,.85);color:#fff;font-size:13px;padding:3px 4px 3px 10px;border-radius:8px;display:flex;gap:8px;align-items:center}
+.hlchip button{min-height:26px;padding:0 8px;background:rgba(255,255,255,.12);color:#fff;border-color:rgba(255,255,255,.3);font-size:12px}
+.busy{position:absolute;left:50%;top:10px;transform:translateX(-50%);background:var(--epoxy);color:var(--epoxy-ink);font-size:13px;padding:4px 12px;border-radius:8px;pointer-events:none}
+.layers{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center;margin-top:8px;font-size:13px;color:var(--muted)}
+.layers label{display:flex;align-items:center;gap:6px}
+.layers input[type=checkbox]{width:17px;height:17px;accent-color:var(--epoxy)}
+.sw{display:inline-block;width:10px;height:10px;border-radius:2px}
+.field{margin:10px 0}
+.field .lbl{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:14px}
+.field output{font-variant-numeric:tabular-nums;color:var(--muted)}
+input[type=range]{width:100%;accent-color:var(--epoxy);margin:4px 0 0}
+.huebar{height:6px;border-radius:3px;margin-top:4px;background:linear-gradient(90deg,#f00,#ff0 16.6%,#0f0 33.3%,#0ff 50%,#00f 66.6%,#f0f 83.3%,#f00);position:relative}
+.huebar span{position:absolute;top:-3px;height:12px;border:2px solid var(--ink);border-radius:4px}
+input[type=number],select{font:inherit;font-size:14px;color:var(--ink);background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:6px 8px;width:100%;min-height:36px}
+.small{font-size:13px;color:var(--muted);margin:4px 0 0}
+.check{display:flex;align-items:flex-start;gap:8px;font-size:14px;margin:8px 0}
+.check input{width:18px;height:18px;accent-color:var(--epoxy);flex:none;margin-top:2px}
+.seg{display:flex;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.seg button{border:0;border-radius:0;min-height:36px;flex:1;background:var(--surface-2);padding:4px 6px}
+.seg button + button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--surface)}
+.clusters{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px;margin:0 0 12px}
+.clusters button{justify-content:flex-start;gap:8px;padding:5px 8px;text-align:left;line-height:1.2}
+.clitem{display:flex;gap:4px;align-items:stretch}
+.clitem .clrole{flex:1;justify-content:flex-start;gap:8px;padding:5px 8px;text-align:left;line-height:1.2}
+.clitem .clshow{min-height:0;padding:2px 8px;font-size:12px}
+.clitem[data-cls="pore"] .clrole{border-color:var(--pore);box-shadow:inset 0 0 0 2px var(--pore)}
+.clitem[data-cls="matrix"] .clrole{border-color:var(--matrix);box-shadow:inset 0 0 0 2px var(--matrix)}
+.swatch{position:relative}
+.swatch i{position:absolute;right:-3px;bottom:-3px;width:11px;height:11px;border-radius:3px;border:1.5px solid var(--surface)}
+.linkbtn{min-height:0;padding:1px 8px;font-size:12.5px;margin-left:4px}
+.linkbtn[aria-pressed="true"]{background:var(--ink);color:var(--surface)}
+.clusters button[data-cls="pore"]{border-color:var(--pore);box-shadow:inset 0 0 0 2px var(--pore)}
+.clusters button[data-cls="matrix"]{border-color:var(--matrix);box-shadow:inset 0 0 0 2px var(--matrix)}
+.clusters .swatch{width:26px;height:26px;border-radius:6px;border:1px solid var(--line);flex:none}
+.clusters small{display:block;font-size:11.5px;color:var(--muted);font-weight:400}
+.howto{margin:8px 0 0;padding-left:20px;font-size:14px}
+.howto li{margin:3px 0}
+.readout{display:flex;align-items:center;gap:12px;background:var(--surface-2);border-radius:10px;padding:10px 12px;margin-top:10px}
+.column{width:16px;height:60px;border-radius:4px;overflow:hidden;background:var(--solid);display:flex;flex-direction:column-reverse;flex:none}
+.column i{display:block;background:var(--pore);transition:height .25s ease}
+.big{font-family:"Instrument Serif",Georgia,serif;font-size:44px;line-height:1;font-variant-numeric:tabular-nums}
+.big small{font-size:20px;color:var(--muted)}
+.stats{display:grid;grid-template-columns:1fr auto;gap:3px 12px;font-size:14px;margin:10px 0 0}
+.stats dt{color:var(--muted)}
+.stats dd{margin:0;text-align:right;font-variant-numeric:tabular-nums}
+.warn{background:var(--warn-bg);color:var(--warn-ink);border-radius:8px;padding:8px 10px;font-size:13px;margin:8px 0}
+.nav{display:flex;gap:8px;margin-top:16px;padding-top:12px;border-top:1px solid var(--line)}
+.nav .primary{flex:1}
+.selcard{border-color:var(--epoxy)}
+.selcard .head{display:flex;align-items:center;gap:8px}
+.selcard .head h2{margin:0;flex:1;font-size:15px}
+.selcard .x{min-height:30px;width:30px;padding:0}
+.mlist{list-style:none;margin:6px 0 0;padding:0;font-size:14px}
+.mlist li{display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums}
+.mlist li span{flex:1}
+.mlist li button{min-height:28px;padding:2px 8px;font-size:13px}
+.calib{border:1px dashed var(--epoxy);border-radius:8px;padding:8px 10px;margin-top:8px}
+/* dashboard */
+.dash{margin-top:18px}
+.dash > h2{font-family:"Instrument Serif",Georgia,serif;font-weight:400;font-size:30px;margin:0 0 4px}
+.grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(min(100%,420px),1fr))}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px;min-width:0}
+.card.wide{grid-column:1/-1}
+.cardhead{display:flex;align-items:center;gap:8px}
+.cardhead h3{margin:0;flex:1;font-size:15px}
+.cardhead button{min-height:30px;font-size:13px;padding:3px 9px}
+canvas.plot{display:block;width:100%;margin-top:6px;touch-action:manipulation}
+.note{font-size:13px;color:var(--ink);margin:6px 0 0}
+.selects{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.selects label{display:flex;flex-direction:column;font-size:12px;color:var(--muted);flex:1;min-width:110px}
+.tablewrap{overflow:auto;max-height:360px;border:1px solid var(--line);border-radius:8px;margin-top:8px}
+table{border-collapse:collapse;width:100%;font-size:12.5px;font-variant-numeric:tabular-nums}
+th,td{padding:5px 7px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--line)}
+th{position:sticky;top:0;background:var(--surface-2);font-weight:600;cursor:pointer;user-select:none}
+th small{display:block;font-weight:400;color:var(--muted)}
+th[aria-sort]{color:var(--epoxy)}
+tbody tr{cursor:pointer}
+tbody tr:hover{background:var(--surface-2)}
+tbody tr.sel{background:color-mix(in srgb,var(--epoxy) 18%,transparent)}
+tbody tr.ex{opacity:.45}
+.legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:13px;margin-top:6px}
+.legend span{display:flex;align-items:center;gap:6px}
+.notes{margin-top:22px;max-width:78ch;color:var(--muted);font-size:14px}
+.notes h2{color:var(--ink)}
+.notes p{margin:0 0 10px}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--surface);padding:8px 14px;border-radius:9px;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:5;max-width:90vw;text-align:center}
+.toast.show{opacity:1}
+
+.topstack{position:absolute;left:10px;right:120px;top:10px;display:flex;flex-direction:column;align-items:flex-start;gap:6px;pointer-events:none}
+.topstack > *{pointer-events:auto}
+.chip,.hlchip{position:static}
+.coach{background:var(--epoxy);color:var(--epoxy-ink);border-radius:10px;padding:6px 6px 6px 12px;font-size:14px;font-weight:500;display:flex;align-items:center;gap:10px;box-shadow:0 4px 14px rgba(0,0,0,.35);max-width:100%}
+.coach button{min-height:30px;padding:2px 12px;background:rgba(255,255,255,.18);color:inherit;border-color:rgba(255,255,255,.45);flex:none}
+.ovtoggle{position:absolute;right:10px;top:10px;min-height:32px;font-size:13px;background:rgba(15,20,23,.8);color:#fff;border-color:rgba(255,255,255,.3)}
+.ovtoggle[aria-pressed="true"]{background:#fff;color:#111}
+.empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#cfd8dc;text-align:center;gap:6px;padding:16px}
+.empty p{margin:0 0 6px;font-size:15px}
+.choices{display:grid;gap:8px;grid-template-columns:1fr 1fr}
+.choice{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;text-align:left;gap:2px;padding:12px;min-height:76px;border-radius:12px;position:relative;cursor:pointer;border:1px solid var(--line);background:var(--surface-2);font:inherit;color:var(--ink)}
+.choice b{font-size:15px}
+.choice small{font-size:12.5px;color:var(--muted);font-weight:400}
+.choice.main{background:var(--epoxy);border-color:var(--epoxy);color:var(--epoxy-ink)}
+.choice.main small{color:inherit;opacity:.85}
+.choice input{position:absolute;width:1px;height:1px;opacity:0}
+.choice:focus-within{outline:2px solid var(--epoxy);outline-offset:2px}
+.fixes{display:grid;gap:6px;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));margin:0 0 10px}
+.fix{flex-direction:column;align-items:flex-start;justify-content:flex-start;text-align:left;gap:1px;padding:8px 10px;min-height:58px;line-height:1.25}
+.fix b{font-weight:600;font-size:13.5px}
+.fix small{font-size:12px;color:var(--muted);font-weight:400}
+.fix.nb{border-color:var(--epoxy);background:color-mix(in srgb,var(--epoxy) 10%,var(--surface-2))}
+.fix.ok{border-color:var(--ok);box-shadow:inset 0 0 0 1px var(--ok)}
+.fix.ok b::before{content:"✓ ";color:var(--ok)}
+.fix.on{border-color:var(--epoxy);box-shadow:inset 0 0 0 2px var(--epoxy)}
+.status{background:var(--surface-2);border-radius:8px;padding:7px 10px;font-size:13.5px;margin:8px 0}
+.status.good{background:color-mix(in srgb,var(--ok) 16%,transparent)}
+.sbox{border:1px solid var(--line);border-radius:10px;padding:10px;margin:0 0 8px}
+.rad{display:grid;grid-template-columns:72px 1fr auto;grid-template-rows:auto auto;align-items:center;gap:0 8px;width:100%;margin-top:4px;text-align:left;padding:4px 8px}
+.rad span{font-size:13px;grid-row:1/3}
+.rad i{display:block;height:8px;border-radius:4px;background:var(--grain);grid-row:1/3}
+.rad b{font-size:13px;font-weight:600;text-align:right}
+.rad small{font-size:11.5px;color:var(--muted);text-align:right}
+.rad.on{border-color:var(--epoxy);box-shadow:inset 0 0 0 2px var(--epoxy)}
+.handtools{border:1px dashed var(--epoxy);border-radius:10px;padding:10px;margin-top:4px}
+.handtools [aria-pressed="true"]{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+.opt{font-weight:400;font-size:12px;color:var(--muted)}
+details.fine{margin-top:12px;border-top:1px solid var(--line);padding-top:8px}
+details.fine summary{cursor:pointer;font-weight:600;font-size:14px;padding:6px 0;list-style-position:inside}
+details.fine[open] summary{margin-bottom:4px}
+[hidden]{display:none !important}
+@media (prefers-reduced-motion:reduce){*{transition:none !important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Thin section porosity &amp; grains</h1>
+    <p>Work through the five steps: load an image, set the scale, find the pores, separate the grains, then explore the results.</p>
+  </header>
+
+  <ol class="stepper" id="stepper"></ol>
+
+  <div class="layout">
+    <section class="viewer">
+      <div class="panel">
+        <div class="tools" id="tools" role="group" aria-label="Tap tool"></div>
+        <p class="toolhint" id="toolhint"></p>
+        <div class="stage" id="stage">
+          <canvas id="vc" aria-label="Thin section viewer"></canvas>
+          <div class="topstack">
+            <div class="coach" id="coach" hidden><span id="coachText"></span><button id="coachDone">Done</button></div>
+            <div class="chip" id="chip" hidden></div>
+            <div class="hlchip" id="hlchip" hidden><span id="hltext"></span><button id="hlclear">Clear</button></div>
+          </div>
+          <button class="ovtoggle" id="ovBtn" hidden>Hide overlay</button>
+          <div class="empty" id="emptyState">
+            <p><b>No image yet</b><br>Drop an image here, or</p>
+            <div class="row" style="justify-content:center"><button class="primary" id="emptyLoad">Load my image</button><button id="emptySample">Try the sample</button></div>
+          </div>
+          <div class="busy" id="busy" hidden>Analysing…</div>
+          <div class="zoom">
+            <button id="zin" aria-label="Zoom in">+</button>
+            <button id="zout" aria-label="Zoom out">−</button>
+            <button id="zfit" class="txt" aria-label="Fit image">Fit</button>
+            <button id="z11" class="txt" aria-label="Actual pixels">1:1</button>
+          </div>
+        </div>
+        <div class="layers">
+          <label><input type="checkbox" id="lyPores" checked><span class="sw" style="background:var(--pore)"></span>Pores</label>
+          <label><input type="checkbox" id="lyGrains" checked><span class="sw" style="background:var(--grain)"></span>Grain outlines</label>
+          <label><input type="checkbox" id="lyFill">Colour grains</label>
+          <label>Overlay <input id="opacity" type="range" min="0.1" max="1" step="0.05" value="0.6" style="width:90px;margin:0"></label>
+          <span class="spacer"></span>
+          <span id="imgInfo">No image loaded</span>
+        </div>
+      </div>
+    </section>
+
+    <aside>
+      <div class="panel selcard" id="selCard" hidden>
+        <div class="head"><h2 id="selTitle"></h2><button class="x" id="selClose" aria-label="Clear selection">×</button></div>
+        <dl class="stats" id="selStats"></dl>
+        <div class="row" style="margin-top:10px" id="selActions"></div>
+      </div>
+
+      <div class="panel" id="stepPanel">
+        <!-- STEP 1 -->
+        <div data-step="image">
+          <h2>1. Choose an image</h2>
+          <p class="lead">Use your own photomicrograph or close‑up photo of grains, or try the sample to see how everything works.</p>
+          <div class="choices">
+            <label class="choice main"><b>Load my image</b><small>JPG, PNG or WebP, with or without a scale bar</small><input id="file" type="file" accept="image/*"></label>
+            <button class="choice" id="sampleBtn"><b>Try the sample</b><small>A sandstone with every step filled in</small></button>
+          </div>
+          <p class="status" id="imgInfo2" hidden></p>
+          <div id="imgOpts" hidden>
+            <h3>Anything to fix first? <span class="opt">optional</span></h3>
+            <div class="fixes">
+              <button class="fix" data-fix="roi"><b>There’s a scale bar, label or slide edge</b><small>Draw a box around the part to analyse</small></button>
+              <button class="fix" data-fix="flatten"><b>The lighting is uneven</b><small>Even out a bright centre or dark corners</small></button>
+              <button class="fix" data-fix="fine"><b>The grains are very small</b><small>Analyse in finer detail (slower)</small></button>
+              <button class="fix" data-fix="bigimg" id="bigFix" hidden><b>This is a very large image</b><small>Analyse part of it at full resolution</small></button>
+            </div>
+            <p class="small" id="roiInfo"></p>
+            <details class="fine"><summary>More options</summary>
+              <div class="field">
+                <div class="lbl"><label for="res">Analysis detail</label></div>
+                <select id="res"><option value="1200">Fast (1200 px)</option><option value="1600" selected>Standard (1600 px)</option><option value="2400">Fine (2400 px)</option><option value="3200">Very fine (3200 px, slower)</option><option value="0">Full resolution (as large as this device allows)</option></select>
+                <p class="small">The long side of the image is analysed at this size. Python works on every original pixel, so for very large images (whole slabs or mosaics) use Full resolution, or analyse an area at full resolution below.</p>
+              </div>
+              <div class="row"><button id="roiTool">Draw analysis area</button><button id="roiReset">Use whole image</button></div>
+              <div class="row" style="margin-top:8px"><button id="cropFull" class="primary" hidden>Analyse the drawn area at full resolution</button><button id="cropBack" hidden>Back to the whole image</button></div>
+            </details>
+          </div>
+        </div>
+
+        <!-- STEP 2 -->
+        <div data-step="scale" hidden>
+          <h2>2. Set the scale</h2>
+          <p class="lead">How do you know how big this image is?</p>
+          <div class="fixes">
+            <button class="fix" data-fix="scalebar"><b>There’s a scale bar in the image</b><small>Tap both ends, then type its length</small></button>
+            <button class="fix" data-fix="dims"><b>I know the image’s width or height</b><small>Type the field of view</small></button>
+            <button class="fix" data-fix="pxsize"><b>I know the pixel size</b><small>Type micrometres per pixel</small></button>
+            <button class="fix" data-fix="noscale"><b>I don’t know the scale</b><small>Skip; results stay in pixels</small></button>
+          </div>
+          <div class="sbox" id="boxBar" hidden>
+            <ol class="howto" style="margin-top:0">
+              <li>Zoom in on the scale bar (pinch, scroll, or the + button).</li>
+              <li>Tap one end of the bar, then the other.</li>
+              <li>Type the bar’s length below and choose Set scale.</li>
+            </ol>
+            <div class="calib" id="calibBox" hidden>
+              <p style="margin:0 0 6px;font-size:14px">Line drawn: <strong id="calibPx"></strong> pixels of the original image</p>
+              <div class="row"><input id="calibUm" type="number" min="0" step="any" placeholder="Length in µm" style="flex:1;width:auto"><button id="calibSet" class="primary">Set scale</button></div>
+            </div>
+          </div>
+          <div class="sbox" id="boxDims" hidden>
+            <p class="small" style="margin-top:0">Type the width <i>or</i> the height of the whole image; the other fills in.</p>
+            <div class="row" style="margin-top:6px">
+              <label style="flex:1;min-width:100px;font-size:13px;color:var(--muted)">Width<input id="dimW" type="number" min="0" step="any" placeholder="e.g. 5"></label>
+              <label style="flex:1;min-width:100px;font-size:13px;color:var(--muted)">Height<input id="dimH" type="number" min="0" step="any" placeholder="e.g. 3.5"></label>
+              <label style="width:86px;font-size:13px;color:var(--muted)">Unit<select id="dimU"><option value="1000">mm</option><option value="1">µm</option><option value="10000">cm</option></select></label>
+            </div>
+          </div>
+          <div class="sbox" id="boxPx" hidden>
+            <div class="field" style="margin:0">
+              <div class="lbl"><label for="scale">µm per pixel of the original image</label></div>
+              <input id="scale" type="number" min="0" step="any" placeholder="e.g. 1.25">
+            </div>
+          </div>
+          <p class="status" id="scaleInfo"></p>
+          <button id="scaleClear">Clear scale</button>
+        </div>
+
+        <!-- STEP 3 -->
+        <div data-step="pores" hidden>
+          <h2>3. Find the pores</h2>
+          <p class="lead">Magenta shows what the app thinks is pore space. Compare it with the picture using <b>Hide overlay</b> on the image, then tell it what’s wrong.</p>
+          <div class="readout"><div class="column" aria-hidden="true"><i id="colPore" style="height:0"></i></div><div><div class="big" id="phi">–<small>%</small></div><p class="small" style="margin:0" id="phiSub">Image porosity</p></div></div>
+          <h3>Does the magenta match the pores?</h3>
+          <div class="fixes">
+            <button class="fix ok" data-fix="poresOk"><b>Yes, it looks right</b><small>Go on to the grains</small></button>
+            <button class="fix" data-fix="swap"><b>It’s on the grains instead</b><small>Swap pore and grain</small></button>
+            <button class="fix" data-fix="tapPores"><b>Some pores are missed</b><small>Tap a few to teach the app</small></button>
+            <button class="fix" data-fix="tapGrains"><b>Some grains are magenta</b><small>Tap a few to teach the app</small></button>
+            <button class="fix" data-fix="morePore"><b>Pores look too small</b><small>Grow the pore area a little</small></button>
+            <button class="fix" data-fix="lessPore"><b>Pores look too big</b><small>Shrink the pore area a little</small></button>
+            <button class="fix" data-fix="speckle"><b>Lots of tiny specks</b><small>Clean up the noise</small></button>
+            <button class="fix" data-fix="matrix"><b>Cement or matrix is included</b><small>Tap it to mark it separately</small></button>
+            <button class="fix" data-fix="fixOne"><b>Only a few pores are wrong</b><small>Add or remove them one by one</small></button>
+            <button class="fix" data-fix="restart"><b>Start over</b><small>Make a fresh first guess</small></button>
+          </div>
+          <h3>Colour groups in this image</h3>
+          <p class="small" id="autoNote" style="margin:0 0 6px"></p>
+          <div class="field" style="margin:4px 0 6px"><div class="lbl"><label for="K">Number of colour groups</label><output id="Ko"></output></div><input id="K" type="range" min="2" max="20" step="1">
+            <p class="small">More groups separate subtle colour differences (minerals, cement types); then give each group a role. <button class="linkbtn" id="mapBtn" aria-pressed="false">Show group map</button></p></div>
+          <button class="fix nb" data-fix="notebook" style="width:100%;margin-bottom:8px"><b>Use the same method as the Python notebook</b><small>K‑means on RGB with k‑means++, exact group split, then erode &amp; dilate with a disk and 4‑connected labelling</small></button>
+          <div class="seg" role="group" aria-label="How colour groups are used" style="margin-bottom:8px">
+            <button data-cld="0" aria-pressed="true">Groups as examples</button>
+            <button data-cld="1">Exact group split</button>
+          </div>
+          <p class="small" style="margin:-2px 0 8px" id="cldNote"></p>
+          <div class="clusters" id="clusterBox" role="group" aria-label="Colour groups: tap to change"></div>
+          <div class="row" style="margin:-4px 0 4px"><button id="undoEdit">Undo last fix</button><button id="clearEdits">Clear hand fixes</button></div>
+          <p class="small" id="editCount"></p>
+          <details class="fine"><summary>Fine‑tune pore detection</summary>
+            <div class="field" style="margin-top:0"><div class="lbl"><label for="phase">The magenta areas are</label></div>
+              <select id="phase"><option value="pore">Pore space (epoxy)</option><option value="matrix">Cement or matrix between grains</option><option value="gap">Gaps between loose grains</option></select></div>
+            <div class="field"><div class="lbl"><label for="clSpace">Group colours using</label></div><select id="clSpace"><option value="lab">Perceptual colour (recommended)</option><option value="rgb">Raw RGB values (as the notebook)</option></select></div>
+            <div class="field"><div class="lbl"><label for="kInit">Starting points for K‑means</label></div><select id="kInit"><option value="quantile">Spread across brightness (stable)</option><option value="kpp">k‑means++ (as scikit‑learn)</option></select></div>
+            <div class="seg" role="group" aria-label="Pore detection method">
+              <button data-mode="samples" aria-pressed="true">Tap examples</button>
+              <button data-mode="hsv">Colour range</button>
+              <button data-mode="gray">Brightness</button>
+              <button data-mode="clusters">Colour groups</button>
+            </div>
+            <div id="mSamples">
+              <p class="small" id="sampleCount"></p>
+              <div class="field" id="balField"><div class="lbl"><label for="bias">Fewer pores ↔ more pores</label><output id="biaso"></output></div><input id="bias" type="range" min="-50" max="50" step="1"></div>
+              <div class="field" id="tolField"><div class="lbl"><label for="tol">Colour tolerance (ΔE)</label><output id="tolo"></output></div><input id="tol" type="range" min="4" max="80" step="1"></div>
+              <div class="row"><button id="autoBtn">Suggest from image</button><button id="swapBtn">Swap pore and grain</button><button id="clearSamples">Clear examples</button></div>
+              <p class="small">In crossed‑polarised images, grains at extinction look black like pores; tap them as grains, or use a plane‑polarised image for porosity.</p>
+            </div>
+            <div id="mHsv" hidden>
+              <p class="small">Choose <b>Pick pore colour</b> above the image and tap a pore, then fine‑tune.</p>
+              <div class="field"><div class="lbl"><label for="hueC">Hue centre</label><output id="hueCo"></output></div><input id="hueC" type="range" min="0" max="359" step="1"><div class="huebar"><span id="hueWin"></span></div></div>
+              <div class="field"><div class="lbl"><label for="hueW">Hue tolerance</label><output id="hueWo"></output></div><input id="hueW" type="range" min="4" max="180" step="1"></div>
+              <div class="field"><div class="lbl"><label for="satMin">Minimum saturation</label><output id="satMino"></output></div><input id="satMin" type="range" min="0" max="1" step="0.01"></div>
+              <div class="field"><div class="lbl"><label for="valMin">Minimum brightness</label><output id="valMino"></output></div><input id="valMin" type="range" min="0" max="1" step="0.01"></div>
+            </div>
+            <div id="mGray" hidden>
+              <div class="seg" role="group" aria-label="Pore brightness" style="margin-top:8px"><button data-ginv="0" aria-pressed="true">Pores are darker</button><button data-ginv="1">Pores are lighter</button></div>
+              <div class="field"><div class="lbl"><label for="grayMax" id="grayLbl">Pores darker than</label><output id="grayMaxo"></output></div><input id="grayMax" type="range" min="0" max="255" step="1"></div>
+              <button id="otsuBtn">Find threshold automatically</button>
+            </div>
+            <h3>Clean up</h3>
+            <label class="check"><input type="checkbox" id="flatten"> Even out uneven lighting</label>
+            <label class="check"><input type="checkbox" id="denoise"> Reduce image noise before classifying</label>
+            <div class="field"><div class="lbl"><label for="minSize">Remove pores smaller than</label><output id="minSizeo"></output></div><input id="minSize" type="range" min="1" max="300" step="1"></div>
+            <div class="field"><div class="lbl"><label for="fillHoles">Fill solid specks inside pores smaller than</label><output id="fillHoleso"></output></div><input id="fillHoles" type="range" min="0" max="300" step="1"></div>
+            <label class="check"><input type="checkbox" id="smooth"> Smooth pore outlines</label>
+            <div class="field"><div class="lbl"><label for="fillTol">Colour tolerance when adding a pore by hand</label><output id="fillTolo"></output></div><input id="fillTol" type="range" min="5" max="120" step="1"></div>
+          </details>
+        </div>
+
+        <!-- STEP 4 -->
+        <div data-step="grains" hidden>
+          <h2>4. Separate the grains</h2>
+          <p class="lead">Each grain gets its own colour. Look for one colour spread over two grains (they’re joined) or one grain in several colours (it’s been cut).</p>
+          <p class="status" id="grainStatus"></p>
+          <button class="fix nb" data-fix="notebook4" style="width:100%;margin-bottom:8px"><b>Separate like the Python notebook</b><small>Erode &amp; dilate with disk(r), 4‑connected labels, every piece kept</small></button>
+          <div class="seg" role="group" aria-label="Separation method" style="margin-bottom:6px">
+            <button data-gm="watershed" aria-pressed="true">Automatic split</button>
+            <button data-gm="opening">Erode &amp; dilate</button>
+          </div>
+          <div class="sbox" id="openBox" hidden>
+            <p class="small" style="margin-top:0">Shrinks the grain area by a disk of radius r to break thin bridges between grains, grows it back by the same disk, then counts each separate piece as a grain. Bridges thinner than about 2r are cut; grains narrower than 2r disappear.</p>
+            <div class="field"><div class="lbl"><label for="openR">Disk radius r (pixels of the original image)</label><output id="openRo"></output></div><input id="openR" type="range" min="0.5" max="40" step="0.5"></div>
+            <p class="small" id="openRw"></p>
+            <div class="field"><div class="lbl"><label for="openConn">Pieces touching only at a corner are</label></div><select id="openConn"><option value="4">separate grains (4‑connected, scipy default)</option><option value="8">the same grain (8‑connected)</option></select></div>
+            <label class="check"><input type="checkbox" id="openBorder" checked> Treat the image edge as background when eroding (as scipy does)</label>
+            <div class="field"><div class="lbl"><label for="openMin">Ignore pieces smaller than (original pixels²)</label></div><input id="openMin" type="number" min="0" step="1" value="0"></div>
+            <label class="check"><input type="checkbox" id="openRestore"> Give trimmed edges back to the nearest grain</label>
+            <button id="radiiBtn">Compare radii</button>
+            <div id="radiiOut"></div>
+          </div>
+          <h3>Does each grain have its own colour?</h3>
+          <div class="fixes">
+            <button class="fix ok" data-fix="grainsOk"><b>Yes, it looks right</b><small>See the results</small></button>
+            <button class="fix" data-fix="joined"><b>Touching grains are joined</b><small>Split more readily</small></button>
+            <button class="fix" data-fix="cut"><b>Grains are cut into pieces</b><small>Split less readily</small></button>
+            <button class="fix" data-fix="small"><b>Small grains are missing</b><small>Allow smaller grains</small></button>
+            <button class="fix" data-fix="holes"><b>Grains with holes or chambers are cut</b><small>Treat holes as part of the grain</small></button>
+            <button class="fix" data-fix="handGrains"><b>Only a few grains are wrong</b><small>Join, split or exclude them by hand</small></button>
+          </div>
+          <div class="handtools" id="handTools" hidden>
+            <p class="small" style="margin:0 0 6px">Pick a tool, then tap on the image. The instructions appear on the image.</p>
+            <div class="row">
+              <button data-settool="merge">Join two grains</button>
+              <button data-settool="split">Split a grain</button>
+              <button data-settool="exclGrain">Exclude a grain</button>
+              <button id="grainUndo">Undo hand fix</button>
+            </div>
+          </div>
+          <div class="row" style="margin-top:10px"><button id="fixUndo">Undo last adjustment</button><button data-fix="resetGrains">Back to automatic settings</button></div>
+          <details class="fine"><summary>Fine‑tune grain separation</summary>
+            <label class="check"><input type="checkbox" id="fillIntra" checked> Treat small pores inside a grain as part of the grain</label>
+            <div class="field"><div class="lbl"><label for="grainR">Smallest grain radius</label><output id="grainRo"></output></div><input id="grainR" type="range" min="3" max="120" step="1"><p class="small">Pieces smaller than this join a neighbour.</p></div>
+            <div class="field"><div class="lbl"><label for="neck">Split touching grains where the contact is narrower than</label><output id="necko"></output></div><input id="neck" type="range" min="30" max="98" step="1"><p class="small">As a share of the smaller grain’s width.</p></div>
+            <div class="field"><div class="lbl"><label for="edgeW">Keep grains of different colour apart</label><output id="edgeWo"></output></div><input id="edgeW" type="range" min="0" max="100" step="1"><p class="small">Raise to 60% or more for crossed‑polarised images.</p></div>
+            <div class="field"><div class="lbl"><label for="darkCut">Leave out pixels darker than</label><output id="darkCuto"></output></div><input id="darkCut" type="range" min="0" max="200" step="1"><p class="small">Removes opaque minerals or dark matrix. 0 turns it off.</p></div>
+            <p class="small">Changing a setting separates the grains again and clears hand fixes, so do hand fixes last.</p>
+          </details>
+        </div>
+
+        <!-- STEP 5 -->
+        <div data-step="results" hidden>
+          <h2>5. Results</h2>
+          <div class="warn" id="staleWarn" hidden>Pores changed after grains were separated. <button id="rerunBtn" style="margin-left:6px">Update grains</button></div>
+          <dl class="stats" id="keyStats"></dl>
+          <h3>What next?</h3>
+          <div class="fixes">
+            <button class="fix ok" data-fix="plots"><b>See the plots and tables</b><small>Size, shape and fabric</small></button>
+            <button class="fix" data-fix="pointcount"><b>Check porosity by point counting</b><small>A grid you can correct by tapping</small></button>
+            <button class="fix" data-fix="measure"><b>Measure a distance</b><small>Tap two points on the image</small></button>
+            <button class="fix" data-fix="another"><b>Analyse another image</b><small>Keeps nothing from this one</small></button>
+          </div>
+          <p id="pcOut" class="status" hidden></p>
+          <ul class="mlist" id="mList"></ul>
+          <h3>Save or share</h3>
+          <div class="row">
+            <button id="copyBtn" class="primary">Copy summary</button>
+            <button id="poreCsv">Pores CSV</button>
+            <button id="grainCsv">Grains CSV</button>
+            <button id="exportPng">Annotated image</button>
+          </div>
+          <p class="small" id="exportNote"></p>
+          <details class="fine"><summary>Options</summary>
+            <label class="check"><input type="checkbox" id="edgeEx" checked> Leave objects cut by the edge of the analysis area out of size and shape statistics</label>
+            <div class="field"><div class="lbl"><label for="nPts">Point‑count grid</label></div><select id="nPts"><option>100</option><option>200</option><option selected>300</option><option>500</option><option>1000</option></select></div>
+          </details>
+        </div>
+
+        <div class="nav"><button id="backBtn">Back</button><button id="nextBtn" class="primary">Next</button></div>
+        <p class="small" id="nextHint" style="text-align:right"></p>
+      </div>
+    </aside>
+  </div>
+
+  <section class="dash" id="dash" hidden>
+    <h2>Results dashboard</h2>
+    <p class="lead">Size and shape statistics use objects inside the analysis area; settings for edge objects are in step 5.</p>
+    <div class="grid">
+      <div class="card"><div class="cardhead"><h3>What the section is made of</h3><button data-save="comp">Save PNG</button></div>
+        <canvas class="plot" id="pl-comp"></canvas><div class="legend" id="compLegend"></div><p class="note" id="nt-comp"></p></div>
+      <div class="card"><div class="cardhead"><h3>Pore size distribution</h3><button data-save="psd">Save PNG</button></div>
+        <p class="small">Bars: share of pore area in each size class. Line: cumulative share, finest first.</p>
+        <canvas class="plot" id="pl-psd"></canvas><p class="note" id="nt-psd"></p></div>
+      <div class="card"><div class="cardhead"><h3>How concentrated the porosity is</h3><button data-save="conc">Save PNG</button></div>
+        <p class="small">Pores ranked largest first against the share of total pore area they hold. The diagonal is equal‑sized pores.</p>
+        <canvas class="plot" id="pl-conc"></canvas><p class="note" id="nt-conc"></p></div>
+      <div class="card"><div class="cardhead"><h3>Grain size distribution</h3><button data-save="gsd">Save PNG</button></div>
+        <p class="small">Bars: share of grains in each size class. Line: cumulative share. Dashed lines mark the 16th, 50th and 84th percentiles.</p>
+        <canvas class="plot" id="pl-gsd"></canvas><p class="note" id="nt-gsd"></p></div>
+      <div class="card"><div class="cardhead"><h3>Grain long‑axis orientation</h3><button data-save="rose">Save PNG</button></div>
+        <p class="small">Rose diagram, angles anticlockwise from the image’s horizontal. Petal area is proportional to the number of grains.</p>
+        <canvas class="plot" id="pl-rose"></canvas><p class="note" id="nt-rose"></p></div>
+      <div class="card"><div class="cardhead"><h3>Grain shape</h3><button data-save="shape">Save PNG</button></div>
+        <p class="small">Elongation against outline regularity. Rounded, equant grains plot top left.</p>
+        <canvas class="plot" id="pl-shape"></canvas><p class="note" id="nt-shape"></p></div>
+      <div class="card"><div class="cardhead"><h3>Distribution of region area</h3><button data-save="area">Save PNG</button></div>
+        <div class="selects"><label>Objects<select id="arSet"><option value="grain">Grains</option><option value="pore">Pores</option></select></label><label>Bins<select id="arBins"><option>15</option><option selected>30</option><option>60</option></select></label></div>
+        <canvas class="plot" id="pl-area"></canvas><p class="note" id="nt-area"></p></div>
+      <div class="card"><div class="cardhead"><h3>Colour groups</h3><button data-save="groups">Save PNG</button></div>
+        <p class="small">Share of the analysed area in each K‑means colour group, with the role you gave it. Tap a bar to show that group on the image.</p>
+        <canvas class="plot" id="pl-groups"></canvas><p class="note" id="nt-groups"></p></div>
+      <div class="card wide"><div class="cardhead"><h3>Explore any two measurements</h3><button data-save="xp">Save PNG</button></div>
+        <div class="selects">
+          <label>Objects<select id="xpSet"><option value="grain">Grains</option><option value="pore">Pores</option></select></label>
+          <label>Horizontal<select id="xpX"></select></label>
+          <label>Vertical<select id="xpY"></select></label>
+        </div>
+        <canvas class="plot" id="pl-xp"></canvas><p class="note" id="nt-xp"></p></div>
+      <div class="card wide"><div class="cardhead"><h3>Grains</h3><button id="grainCsv2">Save CSV</button></div>
+        <p class="small">Tap a heading to sort, or a row to find that grain.</p><div class="tablewrap"><table id="grainTable"></table></div></div>
+      <div class="card wide"><div class="cardhead"><h3>Pores</h3><button id="poreCsv2">Save CSV</button></div>
+        <p class="small">Tap a heading to sort, or a row to find that pore.</p><div class="tablewrap"><table id="poreTable"></table></div></div>
+    </div>
+  </section>
+
+  <section class="notes">
+    <h2>Methods and caveats</h2>
+    <p><b>Pores.</b> In “Tap examples” each pixel is converted to CIELAB colour and assigned to whichever examples, pore or grain, it is closest to; the balance slider shifts that boundary. Pores are grouped by 8‑connectivity. Size and shape come from each object’s pixels: equivalent circular diameter (ECD) from area, axes from the moment ellipse, Feret diameters and solidity from the convex hull, and circularity as 4πA/P² with a corner‑corrected perimeter.</p>
+    <p><b>Grains.</b> Grain‑forming pixels (not pore, not matrix or cement) are first split into many small regions by a watershed on the smoothed distance map, steered by an edge map that combines colour edges with thin dark contact lines. Neighbouring regions are then merged step by step, but only where the contact between them is wide relative to the smaller region, carries no visible edge, and joins similar colours. Leftover fragments join the neighbour they share the longest contact with. Small pores enclosed inside a grain are counted as part of it when most of the pore space is open; for packed loose grains, where enclosed gaps are real pore space, they are left alone. Tested on synthetic sections with known grains, 87–96% of grains are recovered with an overlap of 70% or more when contacts or colour differences are visible, and about 70% when touching grains look identical.</p>
+    <p><b>Matching the Python notebook.</b> “Use the same method as the Python notebook” runs K‑means on RGB with k‑means++ seeding, gives every pixel its group’s role, then erodes and dilates with a disk (radius in original‑image pixels) and labels pieces with 4‑connectivity, keeping every piece. Checked against scikit‑learn, scipy and scikit‑image on six test images at full resolution, grain counts agree to within about 1% for five of them (for example 630 against 629 pieces) and within 10% for the sixth, where K‑means settles slightly differently. Results only match when both work on the same pixels: browsers can’t hold a whole rock‑slab image in memory, so large images are analysed at reduced size unless you analyse an area at full resolution.</p>
+    <p><b>Colour groups and erode &amp; dilate.</b> “Colour groups” clusters every pixel into K groups with K‑means (in perceptual CIELAB colour, or raw RGB), and groups given the same role are merged into one phase. “Erode &amp; dilate” is a morphological opening with a disk of radius r, computed exactly from distance maps, followed by 8‑connected labelling; it cuts bridges thinner than about 2r, removes grains narrower than 2r, and trims corners unless trimmed edges are given back. The region table lists area, axes, centroid and bounding box for every object.</p>
+    <p><b>Image types.</b> The first guess clusters the image’s colours and picks the blue epoxy phase if there is one, otherwise the darkest phase. Dark‑epoxy and crossed‑polarised images work, but grains at extinction look like pores, and loose‑grain photos measure the shadowed gaps between grains rather than true porosity. “Even out uneven lighting” removes broad brightness gradients before classification.</p>
+    <p><b>Interpretation.</b> Section sizes are apparent 2D sizes and are smaller on average than true or sieve sizes. Folk and Ward statistics are number‑weighted from section ECDs; sorting and skewness don’t need a scale, the mean does. Areal porosity approximates volumetric porosity but misses microporosity below image resolution.</p>
+  </section>
+</div>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+(function(){
+"use strict";
+const $=s=>document.querySelector(s),$$=s=>document.querySelectorAll(s);
+let MAXD=1600;const PORE_RGB=[214,36,127],GRAIN_RGB=[255,205,0];
+
+/* =============== state =============== */
+const PHASES={pore:{name:'Porosity',lower:'porosity'},matrix:{name:'Cement / matrix',lower:'cement / matrix'},gap:{name:'Space between grains',lower:'space between grains'}};
+const PH=()=>PHASES[P.phase]||PHASES.pore;
+const P={mode:'samples',bias:0,tol:25,hueC:215,hueW:60,satMin:0.35,valMin:0.15,grayMax:60,grayInv:false,K:4,clDirect:false,clSpace:'lab',phase:'pore',flatten:false,minSize:6,fillHoles:20,smooth:false,denoise:true,fillTol:35,edgeEx:true,
+  grainR:16,fillIntra:true,fillAlways:false,gMethod:'watershed',openR:6,openRestore:false,openConn:4,openBorder:true,openMin:0,kInit:'quantile',neck:90,edgeW:50,darkCut:0};
+let I=null,pore=null,grain=null,umPerOrig=0,roi=null;
+const samples={pore:[],solid:[],matrix:[]};
+let step='image',tool='select',sel=null,mergeFirst=null;
+let ops=[],excl=[],grainUndo=[];
+let measures=[],pending=null,calibLine=null,pts=[],nPts=300;
+const L={pores:true,grains:true,fill:false,opacity:0.6};
+let downloads=null,poreCanvas=null,grainCanvas=null,selCanvas=null,selBox=null,hlCanvas=null,hl=null;
+let poreSort={key:'area',dir:-1},grainSort={key:'area',dir:-1};
+const xp={set:'grain',x:'ecd',y:'ar'};
+
+/* =============== helpers =============== */
+function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>t.classList.remove('show'),2600);}
+function busy(on,msg){const b=$('#busy');b.textContent=msg||'Analysing…';b.hidden=!on;}
+const nf=v=>!Number.isFinite(v)?'–':Math.abs(v)>=1000?Math.round(v).toLocaleString():Math.abs(v)>=100?v.toFixed(0):Math.abs(v)>=10?v.toFixed(1):v.toFixed(2);
+const kUm=()=>umPerOrig>0&&I?umPerOrig/I.scaleF:0;
+const Lv=v=>{const k=kUm();return k?v*k:v;}, Av=v=>{const k=kUm();return k?v*k*k:v;};
+const uL=()=>kUm()?'µm':'px', uA=()=>kUm()?'µm²':'px²';
+function niceNum(x){if(!(x>0))return 1;const e=Math.pow(10,Math.floor(Math.log10(x))),f=x/e;return (f<1.5?1:f<3.5?2:f<7.5?5:10)*e;}
+function percentile(s,p){if(!s.length)return NaN;const x=(s.length-1)*p,i=Math.floor(x),f=x-i;return i+1<s.length?s[i]*(1-f)+s[i+1]*f:s[i];}
+function hsv(r,g,b){r/=255;g/=255;b/=255;const mx=Math.max(r,g,b),mn=Math.min(r,g,b),c=mx-mn;let h=0;if(c>0){if(mx===r)h=((g-b)/c)%6;else if(mx===g)h=(b-r)/c+2;else h=(r-g)/c+4;h*=60;if(h<0)h+=360;}return [h,mx>0?c/mx:0,mx];}
+const LIN=new Float32Array(256);for(let i=0;i<256;i++){const c=i/255;LIN[i]=c<=0.04045?c/12.92:Math.pow((c+0.055)/1.055,2.4);}
+function boxBlur(src,W,H,out){const tmp=new Float32Array(W*H);
+  for(let y=0;y<H;y++){const r=y*W;for(let x=0;x<W;x++){const a=x>0?x-1:0,b=x<W-1?x+1:W-1;tmp[r+x]=(src[r+a]+src[r+x]+src[r+b])/3;}}
+  for(let y=0;y<H;y++){const a=(y>0?y-1:0)*W,b=(y<H-1?y+1:H-1)*W,r=y*W;for(let x=0;x<W;x++)out[r+x]=(tmp[a+x]+tmp[r+x]+tmp[b+x])/3;}
+  return out;}
+
+/* =============== image load =============== */
+function fitDims(w,h){let f=MAXD>0?Math.min(1,MAXD/Math.max(w,h)):1;const cap=maxPixels();if(w*h*f*f>cap)f=Math.sqrt(cap/(w*h));return f;}
+function maxPixels(){const mob=/iPhone|iPad|Android/i.test(navigator.userAgent||'');const mem=navigator.deviceMemory||(mob?3:8);return mob||mem<=4?6e6:12e6;}
+function setImage(drawable,w,h,name,opt){
+  opt=opt||{};
+  let f,W,H;if(opt.workW){W=opt.workW;H=opt.workH;f=W/w;}else{f=fitDims(w,h);W=Math.max(1,Math.round(w*f));H=Math.max(1,Math.round(h*f));}
+  const n=W*H;
+  const base=document.createElement('canvas');base.width=W;base.height=H;const bx=base.getContext('2d');bx.imageSmoothingQuality='high';bx.drawImage(drawable,0,0,W,H);
+  const d=bx.getImageData(0,0,W,H).data;
+  const L8=new Uint8Array(n);for(let i=0,p=0;i<n;i++,p+=4)L8[i]=(0.299*d[p]+0.587*d[p+1]+0.114*d[p+2])|0;
+  const H16=null,S8=null,V8=null,La=null,Aa=null,Ba=null;
+  I={W,H,n,scaleF:f,origW:w,origH:h,name,base,src:drawable,file:opt.file||null,crop:opt.crop||null,rgba:d,H16,S8,V8,L8,La,Aa,Ba,labCache:null,labKey:-1,lumArr:null,grad:null,
+     raw:new Uint8Array(n),matRaw:new Uint8Array(n),tmp:new Uint8Array(n),add:new Uint8Array(n),par:new Int32Array(n+1),vis:new Uint8Array(n),roiMask:new Uint8Array(n)};
+  pore={matrix:new Uint8Array(n),matN:0,mask:new Uint8Array(n),lab:new Int32Array(n),n:0,objs:[],byId:new Map()};
+  grain=null;sel=null;mergeFirst=null;ops=[];excl=[];grainUndo=[];measures=[];pending=null;calibLine=null;hl=null;hlCanvas=null;
+  samples.pore=[];samples.solid=[];samples.matrix=[];umPerOrig=0;$('#calibBox').hidden=true;$('#autoNote').textContent='';$('#clusterBox').innerHTML='';
+  P.grainRUser=false;
+  setRoi(null,true);
+  const info=`${name}: ${w}×${h} px`+(opt.crop?` (area of the full image at x ${opt.crop.x}, y ${opt.crop.y})`:'')+(f<1?`, analysed at ${W}×${H} (1 analysis pixel = ${(1/f).toFixed(1)} original pixels)`:', analysed at full resolution');$('#cropFull').hidden=!(I.file&&f<0.999);$('#bigFix').hidden=!(f<0.5);$('#cropBack').hidden=!(I.crop);$('#imgInfo').textContent=info;$('#imgInfo2').textContent='✓ '+info;$('#imgInfo2').hidden=false;$('#imgOpts').hidden=false;$('#emptyState').hidden=true;$('#ovBtn').hidden=false;
+  syncUI();fit();buildPoints();
+}
+function setRoi(r,silent){
+  roi=r?{x0:Math.max(0,Math.floor(Math.min(r.x0,r.x1))),y0:Math.max(0,Math.floor(Math.min(r.y0,r.y1))),x1:Math.min(I.W,Math.ceil(Math.max(r.x0,r.x1))),y1:Math.min(I.H,Math.ceil(Math.max(r.y0,r.y1)))}:{x0:0,y0:0,x1:I.W,y1:I.H};
+  if(roi.x1-roi.x0<10||roi.y1-roi.y0<10){roi={x0:0,y0:0,x1:I.W,y1:I.H};toast('That area is too small; using the whole image');}
+  const m=I.roiMask;m.fill(0);for(let y=roi.y0;y<roi.y1;y++)m.fill(1,y*I.W+roi.x0,y*I.W+roi.x1);
+  I.roiN=(roi.x1-roi.x0)*(roi.y1-roi.y0);
+  const whole=roi.x0===0&&roi.y0===0&&roi.x1===I.W&&roi.y1===I.H;
+  $('#roiInfo').textContent=whole?'Analysing the whole image.':`Analysing ${Math.round(I.roiN/I.n*100)}% of the image (${Math.round((roi.x1-roi.x0)/I.scaleF)}×${Math.round((roi.y1-roi.y0)/I.scaleF)} px).`;
+  if(!silent){runDetect();}
+}
+
+/* =============== components & measurement =============== */
+function labelCC(m,W,H,lab,par,c4){
+  lab.fill(0);let next=1;
+  const find=x=>{while(par[x]!==x){par[x]=par[par[x]];x=par[x];}return x;};
+  const uni=(a,b)=>{a=find(a);b=find(b);if(a!==b){if(a<b)par[b]=a;else par[a]=b;}};
+  for(let y=0;y<H;y++){const row=y*W;for(let x=0;x<W;x++){const i=row+x;if(!m[i])continue;let l=0,a;
+    if(x>0&&(a=lab[i-1]))l=a;
+    if(y>0){const r=i-W;if(!c4&&x>0&&(a=lab[r-1])){if(l)uni(l,a);else l=a;}if((a=lab[r])){if(l)uni(l,a);else l=a;}if(!c4&&x<W-1&&(a=lab[r+1])){if(l)uni(l,a);else l=a;}}
+    if(!l){l=next++;par[l]=l;}lab[i]=l;}}
+  const comp=new Int32Array(next);let n=0;
+  for(let l=1;l<next;l++)if(find(l)===l)comp[l]=++n;
+  for(let l=1;l<next;l++)comp[l]=comp[find(l)];
+  const area=new Int32Array(n+1);
+  for(let i=0,N=W*H;i<N;i++){const l=lab[i];if(l){const c=comp[l];lab[i]=c;area[c]++;}}
+  return {n,area};
+}
+function convexHull(P){P.sort((a,b)=>a[0]-b[0]||a[1]-b[1]);if(P.length<3)return P.slice();
+  const cr=(o,a,b)=>(a[0]-o[0])*(b[1]-o[1])-(a[1]-o[1])*(b[0]-o[0]);
+  const lo=[];for(const p of P){while(lo.length>=2&&cr(lo[lo.length-2],lo[lo.length-1],p)<=0)lo.pop();lo.push(p);}
+  const up=[];for(let i=P.length-1;i>=0;i--){const p=P[i];while(up.length>=2&&cr(up[up.length-2],up[up.length-1],p)<=0)up.pop();up.push(p);}
+  up.pop();lo.pop();return lo.concat(up);}
+function measureObjects(lab,n,W,H){
+  const A=new Float64Array(n+1),Sx=new Float64Array(n+1),Sy=new Float64Array(n+1),Sxx=new Float64Array(n+1),Syy=new Float64Array(n+1),Sxy=new Float64Array(n+1);
+  const E=new Int32Array(n+1),C=new Int32Array(n+1),x0=new Int32Array(n+1).fill(1e9),y0=new Int32Array(n+1).fill(1e9),x1=new Int32Array(n+1).fill(-1),y1=new Int32Array(n+1).fill(-1);
+  const edge=new Uint8Array(n+1),stamp=new Int32Array(n+1).fill(-1),rmin=new Int32Array(n+1),rmax=new Int32Array(n+1),hp=new Array(n+1);
+  const rx0=roi.x0,ry0=roi.y0,rx1=roi.x1-1,ry1=roi.y1-1;
+  for(let y=0;y<H;y++){const touched=[],row=y*W;
+    for(let x=0;x<W;x++){const i=row+x,l=lab[i];if(!l)continue;
+      A[l]++;Sx[l]+=x;Sy[l]+=y;Sxx[l]+=x*x;Syy[l]+=y*y;Sxy[l]+=x*y;
+      if(x<x0[l])x0[l]=x;if(x>x1[l])x1[l]=x;if(y<y0[l])y0[l]=y;if(y>y1[l])y1[l]=y;
+      const up=y>0&&lab[i-W]===l,dn=y<H-1&&lab[i+W]===l,lf=x>0&&lab[i-1]===l,rt=x<W-1&&lab[i+1]===l;
+      if(x<=rx0||y<=ry0||x>=rx1||y>=ry1)edge[l]=1;
+      E[l]+=(!up)+(!dn)+(!lf)+(!rt);C[l]+=(!up&&!lf)+(!up&&!rt)+(!dn&&!lf)+(!dn&&!rt);
+      if(stamp[l]!==y){stamp[l]=y;rmin[l]=x;touched.push(l);}rmax[l]=x;}
+    for(const l of touched){let a=hp[l];if(!a)a=hp[l]=[];a.push([rmin[l],y],[rmin[l],y+1],[rmax[l]+1,y],[rmax[l]+1,y+1]);}}
+  const objs=[],K=2-Math.SQRT2;
+  for(let l=1;l<=n;l++){const a=A[l];if(!a)continue;
+    const mx=Sx[l]/a,my=Sy[l]/a,cxx=Sxx[l]/a-mx*mx+1/12,cyy=Syy[l]/a-my*my+1/12,cxy=Sxy[l]/a-mx*my;
+    const tr=cxx+cyy,det=cxx*cyy-cxy*cxy,disc=Math.sqrt(Math.max(0,tr*tr/4-det)),l1=tr/2+disc,l2=Math.max(1e-9,tr/2-disc);
+    const major=4*Math.sqrt(l1),minor=4*Math.sqrt(l2),theta=0.5*Math.atan2(2*cxy,cxx-cyy);
+    let orient=(-theta*180/Math.PI)%180;if(orient<0)orient+=180;
+    const hull=convexHull(hp[l]||[]);let hA=0,hP=0;
+    for(let i=0;i<hull.length;i++){const p=hull[i],q=hull[(i+1)%hull.length];hA+=p[0]*q[1]-q[0]*p[1];hP+=Math.hypot(q[0]-p[0],q[1]-p[1]);}
+    hA=Math.abs(hA)/2;
+    let fmax=0,fa=null,fb=null;for(let i=0;i<hull.length;i++)for(let j=i+1;j<hull.length;j++){const d=Math.hypot(hull[i][0]-hull[j][0],hull[i][1]-hull[j][1]);if(d>fmax){fmax=d;fa=hull[i];fb=hull[j];}}
+    let fmin=Infinity;for(let i=0;i<hull.length;i++){const p=hull[i],q=hull[(i+1)%hull.length],ex=q[0]-p[0],ey=q[1]-p[1],len=Math.hypot(ex,ey);if(!len)continue;let m=0;for(const r of hull){const dd=Math.abs(ex*(r[1]-p[1])-ey*(r[0]-p[0]))/len;if(dd>m)m=dd;}if(m<fmin)fmin=m;}
+    if(!Number.isFinite(fmin))fmin=1;
+    const perim=Math.max(E[l]-K*C[l],hP);
+    objs.push({id:l,area:a,cx:mx+.5,cy:my+.5,ecd:2*Math.sqrt(a/Math.PI),major,minor,ar:major/minor,orient,theta,perim,circ:Math.min(1,4*Math.PI*a/(perim*perim)),
+      solid:hA>0?Math.min(1,a/hA):1,fmax,fmin,fa,fb,hull,edge:!!edge[l],bbox:[x0[l],y0[l],x1[l],y1[l]]});}
+  return objs;
+}
+
+/* =============== pore detection =============== */
+let detT=0;
+function scheduleDetect(){if(!I)return;busy(true);clearTimeout(detT);detT=setTimeout(runDetect,100);}
+function blurBig(src,W,H,r){
+  const S=new Float64Array((W+1)*(H+1));
+  for(let y=0;y<H;y++){let row=0;for(let x=0;x<W;x++){row+=src[y*W+x];S[(y+1)*(W+1)+x+1]=S[y*(W+1)+x+1]+row;}}
+  const out=new Float32Array(W*H);
+  for(let y=0;y<H;y++){const y0=Math.max(0,y-r),y1=Math.min(H,y+r+1);for(let x=0;x<W;x++){const x0=Math.max(0,x-r),x1=Math.min(W,x+r+1);
+    out[y*W+x]=(S[y1*(W+1)+x1]-S[y0*(W+1)+x1]-S[y1*(W+1)+x0]+S[y0*(W+1)+x0])/((y1-y0)*(x1-x0));}}
+  return out;}
+function computeLab(){const {n,rgba:d}=I,La=new Float32Array(n),Aa=new Float32Array(n),Ba=new Float32Array(n);
+  for(let i=0,p=0;i<n;i++,p+=4){const R=LIN[d[p]],G=LIN[d[p+1]],B=LIN[d[p+2]];
+    const X=(0.4124*R+0.3576*G+0.1805*B)/0.95047,Y=0.2126*R+0.7152*G+0.0722*B,Z=(0.0193*R+0.1192*G+0.9505*B)/1.08883;
+    const fx=X>0.008856?Math.cbrt(X):7.787*X+0.137931,fy=Y>0.008856?Math.cbrt(Y):7.787*Y+0.137931,fz=Z>0.008856?Math.cbrt(Z):7.787*Z+0.137931;
+    La[i]=116*fy-16;Aa[i]=500*(fx-fy);Ba[i]=200*(fy-fz);}
+  I.La=La;I.Aa=Aa;I.Ba=Ba;}
+function hsvArrays(){if(!I.H16){const {n,rgba:d}=I,H16=new Uint16Array(n),S8=new Uint8Array(n),V8=new Uint8Array(n);
+  for(let i=0,p=0;i<n;i++,p+=4){const r=d[p],g=d[p+1],b=d[p+2],mx=Math.max(r,g,b),mn=Math.min(r,g,b),c=mx-mn;let hh=0;
+    if(c>0){if(mx===r)hh=((g-b)/c)%6;else if(mx===g)hh=(b-r)/c+2;else hh=(r-g)/c+4;hh*=60;if(hh<0)hh+=360;}H16[i]=hh|0;S8[i]=mx>0?Math.round(c/mx*255):0;V8[i]=mx;}
+  I.H16=H16;I.S8=S8;I.V8=V8;}return I;}
+function labArrays(){
+  if(!I.La)computeLab();
+  const key=(P.denoise?1:0)+(P.flatten?2:0);
+  if(I.labCache&&I.labKey===key)return I.labCache;
+  const {W,H,n}=I;let Lc=I.La,Ac=I.Aa,Bc=I.Ba;
+  if(P.flatten){const r=Math.max(8,Math.round(Math.max(W,H)/10)),bg=blurBig(blurBig(I.La,W,H,r),W,H,r);let m=0;for(let i=0;i<n;i++)m+=I.La[i];m/=n;
+    const o=new Float32Array(n);for(let i=0;i<n;i++)o[i]=Math.max(0,Math.min(100,I.La[i]-bg[i]+m));Lc=o;}
+  if(P.denoise){Lc=boxBlur(Lc,W,H,new Float32Array(n));Ac=boxBlur(Ac,W,H,new Float32Array(n));Bc=boxBlur(Bc,W,H,new Float32Array(n));}
+  I.labCache=[Lc,Ac,Bc];I.labKey=key;I.lumArr=null;I.grad=null;return I.labCache;
+}
+function lum(){if(I.lumArr)return I.lumArr;const Lc=labArrays()[0],o=new Uint8Array(I.n);for(let i=0;i<I.n;i++)o[i]=Math.max(0,Math.min(255,Math.round(Lc[i]*2.55)));I.lumArr=o;return o;}
+function refreshSampleLabs(){for(const k of ['pore','solid','matrix'])samples[k].forEach(s=>s.lab=sampleLab(s.x,s.y));}
+/* automatic first guess: cluster the colours (k-means in Lab), then pick the pore cluster */
+function rgbToLabW(r,g,b){const R=LIN[Math.round(r)],G=LIN[Math.round(g)],B=LIN[Math.round(b)];const X=(0.4124*R+0.3576*G+0.1805*B)/0.95047,Y=0.2126*R+0.7152*G+0.0722*B,Z=(0.0193*R+0.1192*G+0.9505*B)/1.08883;
+  const f=t=>t>0.008856?Math.cbrt(t):7.787*t+0.137931,fx=f(X),fy=f(Y),fz=f(Z);return [(116*fy-16)*0.6,500*(fx-fy),200*(fy-fz)];}
+function mulberry(a){return ()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return ((t^t>>>14)>>>0)/4294967296;};}
+/* k-means++ seeding (as scikit-learn), best of 3 seeded runs by inertia */
+function kmeansPP(F,K){
+  const N=F.length,d2=(v,c)=>(v[0]-c[0])**2+(v[1]-c[1])**2+(v[2]-c[2])**2;let best=null,bestI=Infinity;
+  for(let run=0;run<3;run++){const R=mulberry(12+run),C=[F[Math.floor(R()*N)].slice()],D=new Float64Array(N);
+    for(let j=0;j<N;j++)D[j]=d2(F[j],C[0]);
+    while(C.length<K){let sum=0;for(let j=0;j<N;j++)sum+=D[j];let t=R()*sum,pick=N-1;for(let j=0;j<N;j++){t-=D[j];if(t<=0){pick=j;break;}}
+      const c=F[pick].slice();C.push(c);for(let j=0;j<N;j++){const d=d2(F[j],c);if(d<D[j])D[j]=d;}}
+    let Cc=C;for(let it=0;it<60;it++){const sum=Cc.map(()=>[0,0,0,0]);let shift=0;
+      for(let j=0;j<N;j++){const v=F[j];let bk=0,bd=1e30;for(let k=0;k<K;k++){const d=d2(v,Cc[k]);if(d<bd){bd=d;bk=k;}}const s2=sum[bk];s2[0]+=v[0];s2[1]+=v[1];s2[2]+=v[2];s2[3]++;}
+      const nc=Cc.map((c,k)=>sum[k][3]?[sum[k][0]/sum[k][3],sum[k][1]/sum[k][3],sum[k][2]/sum[k][3]]:c);nc.forEach((c,k)=>shift+=d2(c,Cc[k]));Cc=nc;if(shift<1e-4)break;}
+    let inert=0;for(let j=0;j<N;j++){let bd=1e30;for(let k=0;k<K;k++){const d=d2(F[j],Cc[k]);if(d<bd)bd=d;}inert+=bd;}
+    if(inert<bestI){bestI=inert;best=Cc;}}
+  return best;
+}
+const PAL=['#1f77b4','#ff7f0e','#2ca02c','#d62728','#9467bd','#8c564b','#e377c2','#7f7f7f','#bcbd22','#17becf','#aec7e8','#ffbb78','#98df8a','#ff9896','#c5b0d5','#c49c94','#f7b6d2','#c7c7c7','#dbdb8d','#9edae5'];
+/* K-means colour clustering of the whole image (as in the notebook), with K chosen by the user */
+function clusterImage(keep){
+  const rgbS=P.clSpace==='rgb',[La,Aa,Ba]=rgbS?[null,null,null]:labArrays(),{n,W,roiMask,rgba}=I,wL=0.6,K=Math.max(2,Math.min(20,P.K|0));
+  const fv=rgbS?(i=>[rgba[i*4],rgba[i*4+1],rgba[i*4+2]]):(i=>[La[i]*wL,Aa[i],Ba[i]]);
+  const stepN=Math.max(1,Math.floor(n/(P.kInit==='kpp'?150000:50000))),X=[];for(let i=0;i<n;i+=stepN)if(roiMask[i])X.push(i);
+  if(X.length<K*10)return false;
+  const F=X.map(fv),lumOf=v=>rgbS?(0.299*v[0]+0.587*v[1]+0.114*v[2]):v[0];
+  const order=F.map((v,j)=>j).sort((a,b)=>lumOf(F[a])-lumOf(F[b]));
+  let C=Array.from({length:K},(_,k)=>F[order[Math.floor((0.06+0.88*k/(K-1))*(order.length-1))]].slice());
+  if(!rgbS&&K>=3){const bs=F.map(v=>v[2]).sort((a,b)=>a-b),b1=bs[Math.floor(bs.length*0.01)];
+    if(b1<-4){let acc=[0,0,0],cnt=0;for(const v of F)if(v[2]<=b1){acc[0]+=v[0];acc[1]+=v[1];acc[2]+=v[2];cnt++;}
+      const c=acc.map(v=>v/cnt),near=C.reduce((m,cc)=>Math.min(m,Math.hypot(cc[0]-c[0],cc[1]-c[1],cc[2]-c[2])),1e9);if(near>6){C.sort((a,b)=>a[0]-b[0]);C[1]=c;}}}
+  if(P.kInit==='kpp')C=kmeansPP(F,K);
+  const asg=new Uint8Array(F.length);
+  for(let it=0;it<(P.kInit==='kpp'?100:30);it++){const sum=C.map(()=>[0,0,0,0]);let moved=0;
+    for(let j=0;j<F.length;j++){const v=F[j];let bk=0,bd=1e30;for(let k=0;k<K;k++){const c=C[k],d=(v[0]-c[0])**2+(v[1]-c[1])**2+(v[2]-c[2])**2;if(d<bd){bd=d;bk=k;}}if(asg[j]!==bk)moved++;asg[j]=bk;const s2=sum[bk];s2[0]+=v[0];s2[1]+=v[1];s2[2]+=v[2];s2[3]++;}
+    C=C.map((c,k)=>sum[k][3]?[sum[k][0]/sum[k][3],sum[k][1]/sum[k][3],sum[k][2]/sum[k][3]]:c);if(it>3&&moved<F.length*0.001)break;}
+  const ord=C.map((c,k)=>k).sort((a,b)=>lumOf(C[a])-lumOf(C[b]));C=ord.map(k=>C[k]);
+  const map=new Uint8Array(n),cnt=new Float64Array(K),sR=new Float64Array(K),sG=new Float64Array(K),sBl=new Float64Array(K),sL=new Float64Array(K),sA=new Float64Array(K),sB=new Float64Array(K);
+  const flat=new Float32Array(K*3);C.forEach((c,k)=>{flat[k*3]=c[0];flat[k*3+1]=c[1];flat[k*3+2]=c[2];});
+  for(let i=0;i<n;i++){if(!roiMask[i]){map[i]=255;continue;}
+    const v0=rgbS?rgba[i*4]:La[i]*wL,v1=rgbS?rgba[i*4+1]:Aa[i],v2=rgbS?rgba[i*4+2]:Ba[i];let bk=0,bd=1e30;
+    for(let k=0;k<K;k++){const d0=v0-flat[k*3],d1=v1-flat[k*3+1],d2=v2-flat[k*3+2],d=d0*d0+d1*d1+d2*d2;if(d<bd){bd=d;bk=k;}}
+    map[i]=bk;cnt[bk]++;sR[bk]+=rgba[i*4];sG[bk]+=rgba[i*4+1];sBl[bk]+=rgba[i*4+2];if(!rgbS){sL[bk]+=La[i];sA[bk]+=Aa[i];sB[bk]+=Ba[i];}}
+  const tot=cnt.reduce((a,b)=>a+b,0)||1,spread=Math.max(W,I.H)*0.1;
+  const cl=C.map((c,k)=>{const m=cnt[k]||1,lab=rgbS?rgbToLabW(sR[k]/m,sG[k]/m,sBl[k]/m):[sL[k]/m*wL,sA[k]/m,sB[k]/m],reps=[];
+    const cand=[];for(let j=0;j<X.length;j++){const i=X[j];if(map[i]!==k)continue;const v=fv(i);cand.push([(v[0]-c[0])**2+(v[1]-c[1])**2+(v[2]-c[2])**2,i]);}
+    cand.sort((p,q)=>p[0]-q[0]);
+    for(const [d,i] of cand.slice(0,Math.max(40,Math.floor(cand.length*0.25)))){const x=i%W+.5,y=Math.floor(i/W)+.5;if(reps.every(q=>Math.hypot(q.x-x,q.y-y)>spread)){reps.push({x,y});if(reps.length>=3)break;}}
+    return {k,lab,share:cnt[k]/tot,rgb:[sR[k]/m|0,sG[k]/m|0,sBl[k]/m|0],reps,pal:PAL[k%PAL.length]};});
+  let cls=null;
+  if(keep&&I.clusters&&I.clCls){cls=cl.map(c=>{let best=0,bd=1e30;I.clusters.forEach((o,j)=>{const d=Math.hypot(o.lab[0]-c.lab[0],o.lab[1]-c.lab[1],o.lab[2]-c.lab[2]);if(d<bd){bd=d;best=j;}});return I.clCls[best];});}
+  I.clusters=cl;I.clMap=map;I.clCls=cls;buildClusterCanvas();
+  return true;
+}
+function buildClusterCanvas(){const {W,H,n}=I,c=document.createElement('canvas');c.width=W;c.height=H;const cx=c.getContext('2d'),id=cx.createImageData(W,H),o=id.data,m=I.clMap;
+  const rgb=PAL.map(h=>[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)]);
+  for(let i=0,p=0;i<n;i++,p+=4){const k=m[i];if(k===255)continue;const col=rgb[k%rgb.length];o[p]=col[0];o[p+1]=col[1];o[p+2]=col[2];o[p+3]=255;}
+  cx.putImageData(id,0,0);I.clCanvas=c;}
+function autoSuggest(keep){
+  // a fresh guess with many groups starts from a 4-group guess and carries the roles over by colour
+  if(!keep&&P.K>4){const K0=P.K;P.K=4;I.clCls=null;autoSuggest(false);P.K=K0;const note=$('#autoNote').textContent;if(!clusterImage(true))return;
+    $('#autoNote').textContent=note.replace(/^\d+ colour groups found/,`${I.clusters.length} colour groups found`);if(P.clDirect){P.mode='clusters';renderClusters();}else applyClusters(false);return;}
+  if(!clusterImage(keep))return;const cl=I.clusters;
+  if(!I.clCls){
+    const byB=cl.map((c,k)=>k).sort((a,b)=>cl[a].lab[2]-cl[b].lab[2]);let pk=byB[0],why;
+    if(cl[pk].lab[2]<-4&&(cl.length<2||cl[byB[1]].lab[2]-cl[pk].lab[2]>=3))why='the blue (stained epoxy) colour';else{pk=0;why='the darkest colour';}
+    // with many groups, also mark groups that are sub-splits of the pore colour
+    // (a group counts as a sub-split of the pore group when it is much closer to it than to any other group)
+    const dist=(a,b)=>Math.hypot(a.lab[0]-b.lab[0],a.lab[1]-b.lab[1],a.lab[2]-b.lab[2]);
+    I.clCls=cl.map((c,k)=>{if(k===pk)return 'pore';if(cl.length<=4)return 'grain';const dp=dist(c,cl[pk]);let dn=1e9;cl.forEach((o,j)=>{if(j!==k&&j!==pk)dn=Math.min(dn,dist(c,o));});return dp<0.6*dn?'pore':'grain';});
+    $('#autoNote').textContent=`${cl.length} colour groups found. First guess: ${why} is pore space. Tap a group to cycle it between pore, grain and matrix / cement.`;
+  }else $('#autoNote').textContent=`${cl.length} colour groups. Roles were carried over from the previous grouping where colours match.`;
+  if(P.clDirect){P.mode='clusters';renderClusters();}else applyClusters(false);
+}
+function global_dbg(){return typeof global!=='undefined'&&global.__dbg;}
+function applyClusters(run){
+  if(!I||!I.clusters)return;
+  samples.pore=[];samples.solid=[];samples.matrix=[];
+  I.clusters.forEach((c,k)=>{const cls=I.clCls[k];for(const r of c.reps)samples[cls==='grain'?'solid':cls].push({x:r.x,y:r.y,lab:sampleLab(r.x,r.y)});});
+  P.mode='samples';renderClusters();if(run)runDetect();
+}
+function renderClusters(){
+  const box=$('#clusterBox');if(!I||!I.clusters){box.innerHTML='';return;}
+  const NM={pore:'Pore',grain:'Grain',matrix:'Matrix / cement'};
+  box.innerHTML=I.clusters.map((c,k)=>`<div class="clitem" data-cls="${I.clCls[k]}"><button class="clrole" data-cl="${k}" title="Tap to change role"><span class="swatch" style="background:rgb(${c.rgb.join(',')})"><i style="background:${c.pal}"></i></span><span>${k+1}. ${NM[I.clCls[k]]}<small>${(c.share*100).toFixed(1)}% of image</small></span></button><button class="clshow" data-show="${k}" aria-label="Show group ${k+1} on the image">Show</button></div>`).join('');
+}
+function showCluster(k){
+  const {W,H,n}=I,m=I.clMap;if(!hlCanvas||hlCanvas.width!==W){hlCanvas=document.createElement('canvas');hlCanvas.width=W;hlCanvas.height=H;}
+  const c=hlCanvas.getContext('2d'),id=c.createImageData(W,H),o=id.data;
+  for(let i=0,p=0;i<n;i++,p+=4)if(m[i]===k){o[p]=30;o[p+1]=235;o[p+2]=255;o[p+3]=220;}
+  c.putImageData(id,0,0);hl={kind:'cluster',ids:new Set(),label:''};
+  $('#hltext').textContent=`Colour group ${k+1}: ${(I.clusters[k].share*100).toFixed(1)}% of the image`;$('#hlchip').hidden=false;requestDraw();
+}
+function sampleLab(x,y){const [La,Aa,Ba]=labArrays(),W=I.W,H=I.H;let l=0,a=0,b=0,c=0;
+  for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++){const xx=Math.min(W-1,Math.max(0,(x|0)+dx)),yy=Math.min(H-1,Math.max(0,(y|0)+dy)),i=yy*W+xx;l+=La[i];a+=Aa[i];b+=Ba[i];c++;}
+  return [l/c,a/c,b/c];}
+function runDetect(){
+  if(!I)return;
+  const {W,H,n,raw,tmp,add,L8,roiMask}=I;
+  if(P.mode==='samples'){
+    const ps=samples.pore,ss=samples.solid,ms=samples.matrix,mr=I.matRaw;mr.fill(0);
+    if(!ps.length&&!ms.length)raw.fill(0);
+    else{const [La,Aa,Ba]=labArrays(),wL=0.6;
+      const pack=arr=>{const f=new Float32Array(arr.length*3);arr.forEach((s,k)=>{f[k*3]=s.lab[0]*wL;f[k*3+1]=s.lab[1];f[k*3+2]=s.lab[2];});return f;};
+      const pf=pack(ps),sf=pack(ss),mf=pack(ms),np=ps.length,ns=ss.length,nm=ms.length,f=Math.pow(2,P.bias/25),f2=f*f,t2=P.tol*P.tol;
+      const near=(F,cnt,l,a,b)=>{let d=1e30;for(let k=0;k<cnt;k++){const d0=l-F[k*3],d1=a-F[k*3+1],d2=b-F[k*3+2],v=d0*d0+d1*d1+d2*d2;if(v<d)d=v;}return d;};
+      for(let i=0;i<n;i++){if(!roiMask[i]){raw[i]=0;continue;}
+        const l=La[i]*wL,a=Aa[i],b=Ba[i],dp=np?near(pf,np,l,a,b):1e30;
+        if(!ns&&!nm){raw[i]=dp<t2?1:0;continue;}
+        const ds=ns?near(sf,ns,l,a,b):1e30,dm=nm?near(mf,nm,l,a,b):1e30;
+        if(np&&dp<Math.min(ds,dm)*f2)raw[i]=1;else{raw[i]=0;if(dm<ds)mr[i]=1;}}}
+  } else if(P.mode==='clusters'&&I.clMap&&I.clCls){
+    const cm=I.clMap,mr=I.matRaw,isP=I.clCls.map(c=>c==='pore'),isM=I.clCls.map(c=>c==='matrix');mr.fill(0);
+    for(let i=0;i<n;i++){const k=cm[i];if(k===255||!roiMask[i]){raw[i]=0;continue;}raw[i]=isP[k]?1:0;if(isM[k])mr[i]=1;}
+  } else if(P.mode==='hsv'){I.matRaw.fill(0);const {H16,S8,V8}=hsvArrays(),hc=P.hueC,hw=P.hueW/2,sm=Math.round(P.satMin*255),vm=Math.round(P.valMin*255);
+    for(let i=0;i<n;i++){let dh=Math.abs(H16[i]-hc);if(dh>180)dh=360-dh;raw[i]=(roiMask[i]&&dh<=hw&&S8[i]>=sm&&V8[i]>=vm)?1:0;}}
+  else{I.matRaw.fill(0);const t=P.grayMax,lu=lum(),inv=P.grayInv;for(let i=0;i<n;i++)raw[i]=roiMask[i]&&(inv?lu[i]>=t:lu[i]<=t)?1:0;}
+  for(let i=0;i<n;i++)if(add[i]&&roiMask[i])raw[i]=1;
+  let m=raw;
+  if(P.smooth){
+    for(let y=0;y<H;y++)for(let x=0;x<W;x++){let c=0;for(let dy=-1;dy<=1;dy++){const yy=y+dy<0?0:y+dy>=H?H-1:y+dy;for(let dx=-1;dx<=1;dx++){const xx=x+dx<0?0:x+dx>=W?W-1:x+dx;c+=raw[yy*W+xx];}}const i=y*W+x;tmp[i]=(c>=5&&roiMask[i])||add[i]&&roiMask[i]?1:0;}
+    m=tmp;}
+  const lab=pore.lab;
+  if(P.fillHoles>0){
+    const inv=I.vis;for(let i=0;i<n;i++)inv[i]=roiMask[i]&&!m[i]?1:0;
+    const cc=labelCC(inv,W,H,lab,I.par),touch=new Uint8Array(cc.n+1);
+    for(let y=roi.y0;y<roi.y1;y++){touch[lab[y*W+roi.x0]]=1;touch[lab[y*W+roi.x1-1]]=1;}
+    for(let x=roi.x0;x<roi.x1;x++){touch[lab[roi.y0*W+x]]=1;touch[lab[(roi.y1-1)*W+x]]=1;}
+    for(let i=0;i<n;i++){const l=lab[i];if(l&&!touch[l]&&cc.area[l]<P.fillHoles)m[i]=1;}}
+  const cc=labelCC(m,W,H,lab,I.par),drop=new Uint8Array(cc.n+1);
+  for(const s of excl){const l=lab[(s.y|0)*W+(s.x|0)];s.active=!!l;if(l)drop[l]=1;}
+  const remap=new Int32Array(cc.n+1);let k=0;
+  for(let l=1;l<=cc.n;l++)if(!drop[l]&&cc.area[l]>=P.minSize)remap[l]=++k;
+  const mask=pore.mask;
+  for(let i=0;i<n;i++){const l=lab[i];if(l){const r=remap[l];lab[i]=r;mask[i]=r?1:0;}else mask[i]=0;}
+  {const mt=pore.matrix,mr=I.matRaw;let mc=0;for(let i=0;i<n;i++){const v=mr[i]&&!mask[i]&&roiMask[i]&&!add[i]?1:0;mt[i]=v;mc+=v;}pore.matN=mc;}
+  pore.n=k;pore.objs=measureObjects(lab,k,W,H);pore.byId=new Map(pore.objs.map(o=>[o.id,o]));
+  if(grain)grain.stale=true;
+  if(sel&&sel.kind==='pore'){const l=lab[(sel.ty|0)*W+(sel.tx|0)];if(l)sel.id=l;else sel=null;}
+  if(hl&&hl.kind==='pore'){hl=null;hlCanvas=null;}
+  buildPoreCanvas();buildSelCanvas();
+  $('#editCount').textContent=ops.length?`${ops.length} hand fix${ops.length>1?'es':''} applied.`:'';
+  busy(false);refreshAll();
+}
+function buildPoreCanvas(){const {W,H,n}=I;if(!poreCanvas||poreCanvas.width!==W||poreCanvas.height!==H){poreCanvas=document.createElement('canvas');poreCanvas.width=W;poreCanvas.height=H;}
+  const c=poreCanvas.getContext('2d'),id=c.createImageData(W,H),o=id.data,m=pore.mask,mt=pore.matrix;
+  for(let i=0,p=0;i<n;i++,p+=4){if(m[i]){o[p]=PORE_RGB[0];o[p+1]=PORE_RGB[1];o[p+2]=PORE_RGB[2];o[p+3]=255;}else if(mt[i]){o[p]=30;o[p+1]=190;o[p+2]=120;o[p+3]=230;}}c.putImageData(id,0,0);}
+function otsu(){const h=new Float64Array(256),lu=lum();let t=0;for(let i=0;i<I.n;i++)if(I.roiMask[i]){h[lu[i]]++;t++;}
+  let sum=0;for(let i=0;i<256;i++)sum+=i*h[i];let sB=0,wB=0,best=0,thr=0;
+  for(let i=0;i<256;i++){wB+=h[i];if(!wB)continue;const wF=t-wB;if(!wF)break;sB+=i*h[i];const v=wB*wF*Math.pow(sB/wB-(sum-sB)/wF,2);if(v>best){best=v;thr=i;}}return thr;}
+
+/* =============== grain segmentation =============== */
+function dt1d(f,n,d,v,z){let k=0;v[0]=0;z[0]=-1e30;z[1]=1e30;
+  for(let q=1;q<n;q++){let s=((f[q]+q*q)-(f[v[k]]+v[k]*v[k]))/(2*q-2*v[k]);while(s<=z[k]){k--;s=((f[q]+q*q)-(f[v[k]]+v[k]*v[k]))/(2*q-2*v[k]);}k++;v[k]=q;z[k]=s;z[k+1]=1e30;}
+  k=0;for(let q=0;q<n;q++){while(z[k+1]<q)k++;const dq=q-v[k];d[q]=dq*dq+f[v[k]];}}
+function edt(solid,W,H){const INF=1e12,M=Math.max(W,H),f=new Float64Array(M),d=new Float64Array(M),v=new Int32Array(M),z=new Float64Array(M+1),g=new Float32Array(W*H);
+  for(let i=0;i<W*H;i++)g[i]=solid[i]?INF:0;
+  for(let x=0;x<W;x++){for(let y=0;y<H;y++)f[y]=g[y*W+x];dt1d(f,H,d,v,z);for(let y=0;y<H;y++)g[y*W+x]=d[y];}
+  for(let y=0;y<H;y++){const r=y*W;for(let x=0;x<W;x++)f[x]=g[r+x];dt1d(f,W,d,v,z);for(let x=0;x<W;x++)g[r+x]=Math.sqrt(d[x]);}
+  return g;}
+function maxFilter(src,W,H,R){const tmp=new Float32Array(W*H),out=new Float32Array(W*H),dq=new Int32Array(Math.max(W,H)+1);
+  const pass=(inp,outp,len,count,stride,step)=>{for(let k=0;k<count;k++){const b=k*stride;let h=0,t=0;
+    for(let p=0;p<len+R;p++){if(p<len){const v=inp[b+p*step];while(t>h&&inp[b+dq[t-1]*step]<=v)t--;dq[t++]=p;}const c=p-R;if(c>=0){while(dq[h]<c-R)h++;outp[b+c*step]=inp[b+dq[h]*step];}}}};
+  pass(src,tmp,W,H,W,1);pass(tmp,out,H,W,1,W);return out;}
+function gradient(){
+  // "barrier" map, 0..1: colour/brightness edges plus thin dark contact lines, widened by one pixel
+  if(I.grad)return I.grad;const {W,H,n}=I,[La,Aa,Ba]=labArrays(),g=new Float32Array(n);
+  const sob=(ch,i)=>{const gx=(ch[i-W+1]+2*ch[i+1]+ch[i+W+1])-(ch[i-W-1]+2*ch[i-1]+ch[i+W-1]),gy=(ch[i+W-1]+2*ch[i+W]+ch[i+W+1])-(ch[i-W-1]+2*ch[i-W]+ch[i-W+1]);return gx*gx+gy*gy;};
+  for(let y=1;y<H-1;y++){const r=y*W;for(let x=1;x<W-1;x++){const i=r+x;g[i]=Math.sqrt(sob(La,i)+sob(Aa,i)+sob(Ba,i));}}
+  const norm=arr=>{let mx=0;for(let i=0;i<n;i++)if(arr[i]>mx)mx=arr[i];if(!mx)return;const hist=new Uint32Array(1024),sc=1023/mx;let cnt=0;
+    for(let i=0;i<n;i++){const v=arr[i];if(v>0){let b2=(v*sc)|0;if(b2>1023)b2=1023;hist[b2]++;cnt++;}}
+    let acc=0,p98=mx;const lim=cnt*0.98;for(let b2=0;b2<1024;b2++){acc+=hist[b2];if(acc>=lim){p98=(b2+1)/1024*mx;break;}}const inv=1/(p98||1);for(let i=0;i<n;i++){const v=arr[i]*inv;arr[i]=v>1?1:v;}};
+  norm(g);
+  const mean=blurBig(La,W,H,3),v=new Float32Array(n);for(let i=0;i<n;i++)v[i]=Math.max(0,mean[i]-La[i]-2);norm(v);
+  const c=new Float32Array(n);for(let i=0;i<n;i++)c[i]=Math.max(g[i],v[i]);
+  I.grad=maxFilter(c,W,H,1);return I.grad;
+}
+function segmentGrains(){
+  if(!I)return;
+  if(P.gMethod==='opening'){segmentOpening();return;}
+  const {W,H,n,L8,roiMask}=I,mask=pore.mask,mat=pore.matrix,edgeW=P.edgeW/100,neck=P.neck/100;
+  const solid=new Uint8Array(n);let bg=0,sc=0;
+  for(let i=0;i<n;i++){const s=roiMask[i]&&!mask[i]&&!mat[i]&&L8[i]>P.darkCut;solid[i]=s?1:0;if(s)sc++;else if(roiMask[i])bg++;}
+  if(!sc){toast('Nothing is left as grain. Go back to step 3 and mark some colours as grain.');busy(false);return;}
+  if(!bg){toast('No pores or matrix were found, so grains can’t be separated. Go back to step 3.');busy(false);return;}
+  let dt0=edt(solid,W,H);
+  if(!P.grainRUser){let sm=0,c=0;for(let i=0;i<n;i++)if(solid[i]){sm+=dt0[i];c++;}P.grainR=Math.max(3,Math.min(80,Math.round(1.3*sm/Math.max(1,c))));}
+  const R=P.grainR;
+  // 1. small enclosed pores count as part of the grain around them, but only when most pore space is open and
+  //    connected (packed loose grains enclose their pores, so there the enclosed pores are left alone)
+  if(P.fillIntra){
+    const inv=new Uint8Array(n);let poreTot=0;for(let i=0;i<n;i++){inv[i]=roiMask[i]&&!solid[i]&&!mat[i]?1:0;poreTot+=inv[i];}
+    const hl=new Int32Array(n),cc=labelCC(inv,W,H,hl,I.par),bad=new Uint8Array(cc.n+1),holeMax=Math.round(0.35*Math.PI*R*R);
+    for(let y=roi.y0;y<roi.y1;y++){bad[hl[y*W+roi.x0]]=1;bad[hl[y*W+roi.x1-1]]=1;}
+    for(let x=roi.x0;x<roi.x1;x++){bad[hl[roi.y0*W+x]]=1;bad[hl[(roi.y1-1)*W+x]]=1;}
+    for(let i=0;i<n;i++){const l=hl[i];if(!l||bad[l])continue;if(cc.area[l]>holeMax){bad[l]=1;continue;}const x=i%W;
+      for(const j of [x>0?i-1:-1,x<W-1?i+1:-1,i>=W?i-W:-1,i<n-W?i+W:-1])if(j>=0&&mat[j])bad[l]=1;}
+    let enc=0;for(let l=1;l<=cc.n;l++)if(!bad[l])enc+=cc.area[l];
+    if(enc>0&&(P.fillAlways||enc<0.15*poreTot)){for(let i=0;i<n;i++){const l=hl[i];if(l&&!bad[l])solid[i]=1;}dt0=edt(solid,W,H);}
+  }
+  const dts=boxBlur(boxBlur(dt0,W,H,new Float32Array(n)),W,H,new Float32Array(n));
+  for(let i=0;i<n;i++)if(!solid[i])dts[i]=0;
+  const grad=edgeW>0?gradient():null;
+  // 2. over-segment: a marker at every local maximum of the distance map
+  const r0=Math.max(2,Math.round(R*0.3)),mx=maxFilter(dts,W,H,r0),mk=new Uint8Array(n);
+  for(let i=0;i<n;i++)mk[i]=(solid[i]&&dts[i]>=1.2&&dts[i]>=mx[i]-1e-4)?1:0;
+  const g=new Int32Array(n),mc=labelCC(mk,W,H,g,I.par);
+  // 3. watershed flood on distance, steered by image edges
+  const ew=edgeW*R*0.8;let eMin=1e9,eMax=-1e9;const e=new Float32Array(n);
+  for(let i=0;i<n;i++)if(solid[i]){const v=dts[i]-(grad?ew*grad[i]:0);e[i]=v;if(v<eMin)eMin=v;if(v>eMax)eMax=v;}
+  const q=new Int32Array(n),maxQ=Math.max(1,Math.ceil((eMax-eMin)*2)+1);
+  for(let i=0;i<n;i++)if(solid[i])q[i]=Math.round((e[i]-eMin)*2);
+  const head=new Int32Array(maxQ+1).fill(-1),nxt=new Int32Array(n),push=(i,b)=>{nxt[i]=head[b];head[b]=i;};
+  for(let i=0;i<n;i++)if(g[i])push(i,q[i]);
+  for(let cur=maxQ;cur>=0;cur--){while(head[cur]!==-1){const i=head[cur];head[cur]=nxt[i];const x=i%W,l=g[i];
+    if(x>0){const j=i-1;if(solid[j]&&!g[j]){g[j]=l;push(j,Math.min(q[j],cur));}}
+    if(x<W-1){const j=i+1;if(solid[j]&&!g[j]){g[j]=l;push(j,Math.min(q[j],cur));}}
+    if(i>=W){const j=i-W;if(solid[j]&&!g[j]){g[j]=l;push(j,Math.min(q[j],cur));}}
+    if(i<n-W){const j=i+W;if(solid[j]&&!g[j]){g[j]=l;push(j,Math.min(q[j],cur));}}}}
+  let M=mc.n;
+  {const rest=new Uint8Array(n);let any=0;for(let i=0;i<n;i++)if(solid[i]&&!g[i]){rest[i]=1;any=1;}
+   if(any){const rl=new Int32Array(n),rc=labelCC(rest,W,H,rl,I.par);for(let i=0;i<n;i++)if(rl[i])g[i]=M+rl[i];M+=rc.n;}}
+  // 4. region statistics and contacts
+  const [La,Aa,Ba]=labArrays(),pk=new Float32Array(M+1),ar=new Float64Array(M+1),sL=new Float64Array(M+1),sA=new Float64Array(M+1),sB=new Float64Array(M+1);
+  const pairs=new Map(),K=M+1;
+  const addPair=(a,b,i,j)=>{if(a>b){const t=a;a=b;b=t;}const key=a*K+b;let p=pairs.get(key);if(!p){p=[a,b,0,0,0];pairs.set(key,p);}
+    const sd=Math.min(dts[i],dts[j]);if(sd>p[2])p[2]=sd;p[3]+=grad?(grad[i]+grad[j])/2:0;p[4]++;};
+  for(let i=0;i<n;i++){const a=g[i];if(!a)continue;ar[a]++;sL[a]+=La[i];sA[a]+=Aa[i];sB[a]+=Ba[i];if(dts[i]>pk[a])pk[a]=dts[i];const x=i%W;
+    if(x<W-1){const b=g[i+1];if(b&&b!==a)addPair(a,b,i,i+1);}
+    if(i<n-W){const b=g[i+W];if(b&&b!==a)addPair(a,b,i,i+W);}}
+  const uf=new Int32Array(M+1);for(let l=0;l<=M;l++)uf[l]=l;
+  const find=x=>{while(uf[x]!==x){uf[x]=uf[uf[x]];x=uf[x];}return x;};
+  const join=(a,b)=>{uf[b]=a;pk[a]=Math.max(pk[a],pk[b]);ar[a]+=ar[b];sL[a]+=sL[b];sA[a]+=sA[b];sB[a]+=sB[b];};
+  const cThr=edgeW>0?45-37*edgeW:1e9,gThr=edgeW>0?0.9-0.6*edgeW:2,base=[...pairs.values()];
+  const dE=(a,b)=>Math.hypot(sL[a]/ar[a]-sL[b]/ar[b],sA[a]/ar[a]-sA[b]/ar[b],sB[a]/ar[a]-sB[b]/ar[b]);
+  // 5. merge regions joined by a wide contact, no visible edge and similar colour (repeat until stable)
+  for(let pass=0;pass<15;pass++){
+    const agg=new Map();
+    for(const p of base){let a=find(p[0]),b=find(p[1]);if(a===b)continue;if(a>b){const t=a;a=b;b=t;}const key=a*K+b;let v=agg.get(key);if(!v){v=[a,b,0,0,0];agg.set(key,v);}if(p[2]>v[2])v[2]=p[2];v[3]+=p[3];v[4]+=p[4];}
+    const cand=[];for(const v of agg.values()){const r=v[2]/Math.max(1e-6,Math.min(pk[v[0]],pk[v[1]]));if(r>=neck)cand.push([r,v]);}
+    cand.sort((x,y)=>y[0]-x[0]);let merged=0;
+    for(const [,v] of cand){const a=find(v[0]),b=find(v[1]);if(a===b)continue;
+      const r=v[2]/Math.max(1e-6,Math.min(pk[a],pk[b])),gm=v[4]?v[3]/v[4]:0;
+      if(r>=neck&&gm<gThr&&dE(a,b)<=cThr){join(a,b);merged++;}}
+    if(!merged)break;
+  }
+  // 6. absorb fragments into the neighbour they share the longest contact with
+  const minA=Math.max(P.minSize,Math.round(Math.PI*(R/2)*(R/2)));
+  for(let pass=0;pass<3;pass++){
+    const adj=new Map();
+    for(const p of base){const a=find(p[0]),b=find(p[1]);if(a===b)continue;
+      for(const [u,v] of [[a,b],[b,a]]){let m=adj.get(u);if(!m){m=new Map();adj.set(u,m);}m.set(v,(m.get(v)||0)+p[4]);}}
+    const roots=[];for(let l=1;l<=M;l++)if(find(l)===l&&ar[l]>0&&ar[l]<minA)roots.push(l);
+    if(!roots.length)break;roots.sort((a,b)=>ar[a]-ar[b]);let ch=0;
+    for(const r of roots){if(find(r)!==r||ar[r]>=minA)continue;const m=adj.get(r);if(!m)continue;let best=0,bc=0;
+      for(const [v,c] of m){const fv=find(v);if(fv!==r&&c>bc){bc=c;best=fv;}}if(best){join(best,r);ch++;}}
+    if(!ch)break;
+  }
+  const remap=new Int32Array(M+1);let k=0;
+  for(let l=1;l<=M;l++){const r=find(l);if(r===l&&ar[l]>=minA)remap[l]=++k;}
+  for(let i=0;i<n;i++)if(g[i])g[i]=remap[find(g[i])];
+  // 7. pores enclosed by a single grain (chambers, dissolution holes) become part of that grain
+  if(P.fillIntra){
+    const inv=new Uint8Array(n);for(let i=0;i<n;i++)inv[i]=roiMask[i]&&!g[i]&&!mat[i]?1:0;
+    const hl=new Int32Array(n),cc=labelCC(inv,W,H,hl,I.par),owner=new Int32Array(cc.n+1),bad=new Uint8Array(cc.n+1),holeMax=Math.round(Math.PI*R*R);
+    for(let y=roi.y0;y<roi.y1;y++){bad[hl[y*W+roi.x0]]=1;bad[hl[y*W+roi.x1-1]]=1;}
+    for(let x=roi.x0;x<roi.x1;x++){bad[hl[roi.y0*W+x]]=1;bad[hl[(roi.y1-1)*W+x]]=1;}
+    for(let i=0;i<n;i++){const l=hl[i];if(!l||bad[l])continue;if(cc.area[l]>holeMax){bad[l]=1;continue;}const x=i%W;
+      for(const j of [x>0?i-1:-1,x<W-1?i+1:-1,i>=W?i-W:-1,i<n-W?i+W:-1]){if(j<0)continue;const o=g[j];if(o){if(!owner[l])owner[l]=o;else if(owner[l]!==o)bad[l]=1;}else if(mat[j])bad[l]=1;}}
+    for(let i=0;i<n;i++){const l=hl[i];if(l&&!bad[l]&&owner[l])g[i]=owner[l];}
+  }
+  grain={lab:g,n:k,objs:[],excluded:new Set(),stale:false};
+  remeasureGrains();
+  grainUndo=[];if(sel&&sel.kind==='grain')sel=null;mergeFirst=null;if(hl&&hl.kind==='grain'){hl=null;hlCanvas=null;}
+  busy(false);refreshAll();
+}
+
+function grainSolid(){const {n,L8,roiMask}=I,mask=pore.mask,mat=pore.matrix,solid=new Uint8Array(n);let sc=0;
+  for(let i=0;i<n;i++){const v=roiMask[i]&&!mask[i]&&!mat[i]&&L8[i]>P.darkCut;solid[i]=v?1:0;sc+=solid[i];}return {solid,sc};}
+/* opening = erosion then dilation with a disk of radius r, using exact distance maps; then 8-connected labelling */
+/* Opening = binary erosion then binary dilation with a disk footprint (x²+y² ≤ r²), exactly as scipy.ndimage with
+   skimage.morphology.disk; computed from exact distance maps. Pixels outside the image count as background during
+   erosion (scipy's border_value=0). Pieces are then labelled with 4- or 8-connectivity (scipy's default is 4). */
+function erodeDist(solid){const {W,H}=I,dt=edt(solid,W,H);
+  if(P.openBorder)for(let y=0;y<H;y++){const r=y*W,dy=Math.min(y+1,H-y);for(let x=0;x<W;x++){const db=Math.min(dy,x+1,W-x);if(db<dt[r+x])dt[r+x]=db;}}
+  return dt;}
+function openLabels(solid,dtIn,r,minA){
+  const {W,H,n}=I,er=new Uint8Array(n);let any=0;for(let i=0;i<n;i++){if(dtIn[i]>r){er[i]=1;any=1;}}
+  if(!any)return {g:new Int32Array(n),n:0,open:er};
+  const notEr=new Uint8Array(n);for(let i=0;i<n;i++)notEr[i]=er[i]?0:1;
+  const dOut=edt(notEr,W,H),open=new Uint8Array(n);for(let i=0;i<n;i++)open[i]=(dOut[i]<=r&&solid[i])?1:0;
+  const g=new Int32Array(n),cc=labelCC(open,W,H,g,I.par,P.openConn===4),remap=new Int32Array(cc.n+1);let k=0;
+  for(let l=1;l<=cc.n;l++)if(cc.area[l]>=minA)remap[l]=++k;
+  for(let i=0;i<n;i++)if(g[i])g[i]=remap[g[i]];
+  return {g,n:k,open};
+}
+const openMinWork=()=>Math.max(1,Math.round(P.openMin*I.scaleF*I.scaleF));
+function segmentOpening(){
+  const {W,H,n}=I,{solid,sc}=grainSolid();
+  if(!sc){toast('Nothing is left as grain. Go back to step 3 and mark some colours as grain.');busy(false);return;}
+  const rw=P.openR*I.scaleF,dtIn=erodeDist(solid),res=openLabels(solid,dtIn,rw,openMinWork());
+  const g=res.g;
+  if(P.openRestore){let q=[];for(let i=0;i<n;i++)if(g[i])q.push(i);
+    while(q.length){const nq=[];for(const i of q){const x=i%W,l=g[i];for(const j of [x>0?i-1:-1,x<W-1?i+1:-1,i>=W?i-W:-1,i<n-W?i+W:-1]){if(j>=0&&solid[j]&&!g[j]){g[j]=l;nq.push(j);}}}q=nq;}}
+  grain={lab:g,n:res.n,objs:[],excluded:new Set(),stale:false};
+  remeasureGrains();
+  grainUndo=[];if(sel&&sel.kind==='grain')sel=null;mergeFirst=null;if(hl&&hl.kind==='grain'){hl=null;hlCanvas=null;}
+  if(rw<1)toast(`At this detail level r = ${P.openR} px is only ${rw.toFixed(2)} analysis pixels, so almost nothing is cut. Raise the detail or analyse an area at full resolution.`);
+  busy(false);refreshAll();
+}
+function compareRadii(){
+  const {solid,sc}=grainSolid();if(!sc)return;
+  const dtIn=erodeDist(solid),radii=[1,1.8,3,6,10,12,20,30];
+  const out=radii.map(r=>{const rw=r*I.scaleF,res=openLabels(solid,dtIn,rw,openMinWork());let kept=0;for(let i=0;i<res.open.length;i++)kept+=res.open[i];return {r,rw,n:res.n,kept:kept/sc};});
+  const mx=Math.max(...out.map(o=>o.n))||1;
+  $('#radiiOut').innerHTML=`<p class="small" style="margin:6px 0 4px">Pieces found at each radius (in original‑image pixels). Tap one to use it. “Kept” is the share of grain area left after trimming.</p>`+out.map(o=>`<button class="rad${o.r===P.openR?' on':''}" data-rad="${o.r}"><span>r = ${o.r} px${o.rw<1?' ⚠':''}</span><i style="width:${(o.n/mx*100).toFixed(0)}%"></i><b>${o.n.toLocaleString()} grains</b><small>kept ${(o.kept*100).toFixed(0)}%</small></button>`).join('')+(out.some(o=>o.rw<1)?`<p class="small">⚠ smaller than one analysis pixel at the current detail, so these radii have little effect.</p>`:'');
+  busy(false);
+}
+function remeasureGrains(){grain.objs=measureObjects(grain.lab,grain.n,I.W,I.H);grain.byId=new Map(grain.objs.map(o=>[o.id,o]));buildGrainCanvas();}
+let segT=0;
+function scheduleSegment(){if(!I)return;busy(true,'Separating grains…');clearTimeout(segT);segT=setTimeout(segmentGrains,350);}
+function grainColor(id){const h=(id*137.508)%360,s=.65,l=.55,c=(1-Math.abs(2*l-1))*s,x=c*(1-Math.abs((h/60)%2-1)),m=l-c/2;let r=0,g=0,b=0;
+  if(h<60){r=c;g=x;}else if(h<120){r=x;g=c;}else if(h<180){g=c;b=x;}else if(h<240){g=x;b=c;}else if(h<300){r=x;b=c;}else{r=c;b=x;}return [(r+m)*255|0,(g+m)*255|0,(b+m)*255|0];}
+function buildGrainCanvas(){
+  if(!grain){grainCanvas=null;return;}const {W,H,n}=I;
+  if(!grainCanvas||grainCanvas.width!==W||grainCanvas.height!==H){grainCanvas=document.createElement('canvas');grainCanvas.width=W;grainCanvas.height=H;}
+  const c=grainCanvas.getContext('2d'),id=c.createImageData(W,H),o=id.data,g=grain.lab,ex=grain.excluded,pal=[];
+  for(let i=0,p=0;i<n;i++,p+=4){const l=g[i];if(!l)continue;const x=i%W;
+    const b=(x>0&&g[i-1]!==l)||(x<W-1&&g[i+1]!==l)||(i>=W&&g[i-W]!==l)||(i<n-W&&g[i+W]!==l);
+    if(b){o[p]=GRAIN_RGB[0];o[p+1]=GRAIN_RGB[1];o[p+2]=GRAIN_RGB[2];o[p+3]=255;}
+    else if(ex.has(l)){o[p]=50;o[p+1]=50;o[p+2]=50;o[p+3]=190;}
+    else if(L.fill){const cc=pal[l]||(pal[l]=grainColor(l));o[p]=cc[0];o[p+1]=cc[1];o[p+2]=cc[2];o[p+3]=110;}}
+  c.putImageData(id,0,0);}
+function snapGrains(){grainUndo.push({lab:grain.lab.slice(),n:grain.n,ex:new Set(grain.excluded)});if(grainUndo.length>6)grainUndo.shift();}
+function mergeGrains(a,b){if(a===b)return;snapGrains();const g=grain.lab;for(let i=0;i<g.length;i++)if(g[i]===b)g[i]=a;grain.excluded.delete(b);remeasureGrains();refreshAll();}
+function splitGrain(p,q){
+  const W=I.W,g=grain.lab,ia=(p.y|0)*W+(p.x|0),ib=(q.y|0)*W+(q.x|0),l=g[ia];
+  if(!l||g[ib]!==l){toast('Tap two points inside the same grain, one in each part');return 'fail';}
+  const o=grain.byId.get(l),[x0,y0,x1,y1]=o.bbox,w=x1-x0+1,h=y1-y0+1,sub=new Uint8Array(w*h);
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++)sub[y*w+x]=g[(y+y0)*W+x+x0]===l?1:0;
+  const dt=edt(sub,w,h),grad=P.edgeW>0?gradient():null,ew=(P.edgeW/100)*Math.max(3,P.grainR)*0.8,e=new Float32Array(w*h);
+  let eMin=1e9,eMax=-1e9;
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++){const j=y*w+x;if(!sub[j])continue;const v=dt[j]-(grad?ew*grad[(y+y0)*W+x+x0]:0);e[j]=v;if(v<eMin)eMin=v;if(v>eMax)eMax=v;}
+  // move each tap uphill to the centre of its part
+  const climb=(x,y)=>{let j=(y-y0)*w+(x-x0);for(let s2=0;s2<400;s2++){const cx=j%w,cy=(j/w)|0;let best=j;
+    for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){const xx=cx+dx,yy=cy+dy;if(xx<0||yy<0||xx>=w||yy>=h)continue;const k2=yy*w+xx;if(sub[k2]&&dt[k2]>dt[best])best=k2;}
+    if(best===j)break;j=best;}return j;};
+  let sa=climb(p.x|0,p.y|0),sb=climb(q.x|0,q.y|0);
+  if(sa===sb){sa=(((p.y|0)-y0)*w+((p.x|0)-x0));sb=(((q.y|0)-y0)*w+((q.x|0)-x0));}
+  const lab2=new Uint8Array(w*h),qq=new Int32Array(w*h),maxQ=Math.ceil((eMax-eMin)*2)+1,head=new Int32Array(maxQ+1).fill(-1),nxt=new Int32Array(w*h);
+  for(let j=0;j<w*h;j++)if(sub[j])qq[j]=Math.round((e[j]-eMin)*2);
+  const push=(j,b2)=>{nxt[j]=head[b2];head[b2]=j;};
+  lab2[sa]=1;lab2[sb]=2;push(sa,qq[sa]);push(sb,qq[sb]);
+  for(let cur=maxQ;cur>=0;cur--){while(head[cur]!==-1){const j=head[cur];head[cur]=nxt[j];const x=j%w,lb=lab2[j];
+    for(const k2 of [x>0?j-1:-1,x<w-1?j+1:-1,j>=w?j-w:-1,j<w*h-w?j+w:-1]){if(k2<0||!sub[k2]||lab2[k2])continue;lab2[k2]=lb;push(k2,Math.min(qq[k2],cur));}}}
+  let c2=0;for(let j=0;j<w*h;j++)if(lab2[j]===2)c2++;
+  if(c2<4||c2>o.area-4){toast('Couldn’t find a way to split there. Tap nearer the middle of each part.');return 'fail';}
+  snapGrains();const nid=++grain.n;
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++)if(lab2[y*w+x]===2)g[(y+y0)*W+x+x0]=nid;
+  remeasureGrains();refreshAll();return true;
+}
+function undoGrain(){const s=grainUndo.pop();if(!s){toast('Nothing to undo');return;}grain.lab=s.lab;grain.n=s.n;grain.excluded=s.ex;sel=null;remeasureGrains();refreshAll();}
+
+/* =============== selection & highlight =============== */
+function objOf(s){if(!s)return null;return s.kind==='pore'?pore.byId.get(s.id):grain&&grain.byId.get(s.id);}
+function buildSelCanvas(){selCanvas=null;selBox=null;const o=objOf(sel);if(!o)return;
+  const [x0,y0,x1,y1]=o.bbox,w=x1-x0+1,h=y1-y0+1,lab=sel.kind==='pore'?pore.lab:grain.lab,W=I.W;
+  const c=document.createElement('canvas');c.width=w;c.height=h;const cx=c.getContext('2d'),id=cx.createImageData(w,h),d=id.data;
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++)if(lab[(y+y0)*W+x+x0]===o.id){const p=(y*w+x)*4;d[p]=40;d[p+1]=230;d[p+2]=255;d[p+3]=150;}
+  cx.putImageData(id,0,0);selCanvas=c;selBox=[x0,y0];}
+function select(kind,id,tx,ty){sel={kind,id,tx,ty};buildSelCanvas();renderSel();highlightRows();requestDraw();if(dashVisible())drawPlot('xp');}
+function clearSel(){sel=null;selCanvas=null;mergeFirst=null;renderSel();highlightRows();requestDraw();}
+function setHighlight(kind,ids,label){
+  hl={kind,ids,label};const {W,H,n}=I,lab=kind==='pore'?pore.lab:grain.lab;
+  if(!hlCanvas||hlCanvas.width!==W){hlCanvas=document.createElement('canvas');hlCanvas.width=W;hlCanvas.height=H;}
+  const c=hlCanvas.getContext('2d'),id=c.createImageData(W,H),o=id.data;
+  for(let i=0,p=0;i<n;i++,p+=4){const l=lab[i];if(l&&ids.has(l)){o[p]=30;o[p+1]=235;o[p+2]=255;o[p+3]=210;}}
+  c.putImageData(id,0,0);
+  $('#hltext').textContent=label;$('#hlchip').hidden=false;requestDraw();
+  if(window.innerWidth<980)$('#stage').scrollIntoView({behavior:'smooth',block:'center'});
+}
+function clearHighlight(){hl=null;hlCanvas=null;$('#hlchip').hidden=true;requestDraw();}
+$('#hlclear').onclick=clearHighlight;
+const phiOf=ecdPx=>{const k=kUm();return k?-Math.log2(ecdPx*k/1000):NaN;};
+function wentworth(mm){if(!(mm>0))return '';if(mm<0.0039)return 'clay';if(mm<0.0625)return 'silt';if(mm<0.125)return 'very fine sand';if(mm<0.25)return 'fine sand';if(mm<0.5)return 'medium sand';if(mm<1)return 'coarse sand';if(mm<2)return 'very coarse sand';if(mm<4)return 'granule';return 'pebble';}
+function renderSel(){
+  const card=$('#selCard'),o=objOf(sel);if(!o){card.hidden=true;return;}card.hidden=false;
+  const isG=sel.kind==='grain',ex=isG&&grain.excluded.has(o.id);
+  $('#selTitle').textContent=`${isG?'Grain':'Pore'} ${o.id}${ex?' (excluded)':''}`;
+  const rows=[['Area',`${nf(Av(o.area))} ${uA()}`],['Equivalent diameter',`${nf(Lv(o.ecd))} ${uL()}`]];
+  if(isG&&kUm())rows.push(['Size',`${nf(phiOf(o.ecd))} φ, ${wentworth(Lv(o.ecd)/1000)}`]);
+  rows.push(['Major / minor axis',`${nf(Lv(o.major))} / ${nf(Lv(o.minor))} ${uL()}`],['Aspect ratio',nf(o.ar)],['Orientation',`${o.orient.toFixed(0)}°`],
+    ['Circularity',o.circ.toFixed(3)],['Solidity',o.solid.toFixed(3)],['Feret max / min',`${nf(Lv(o.fmax))} / ${nf(Lv(o.fmin))} ${uL()}`]);
+  if(o.edge)rows.push(['Cut by analysis edge','yes']);
+  $('#selStats').innerHTML=rows.map(r=>`<dt>${r[0]}</dt><dd>${r[1]}</dd>`).join('');
+  const act=$('#selActions');act.innerHTML='';const mk=(t,fn)=>{const b=document.createElement('button');b.textContent=t;b.onclick=fn;act.appendChild(b);};
+  mk('Zoom to',()=>zoomToObj(o));
+  if(isG)mk(ex?'Include grain':'Exclude grain',()=>{snapGrains();if(ex)grain.excluded.delete(o.id);else grain.excluded.add(o.id);buildGrainCanvas();refreshAll();});
+  else mk('Remove pore',()=>{excl.push({x:sel.tx,y:sel.ty});ops.push({t:'excl'});clearSel();runDetect();});
+}
+
+/* =============== statistics =============== */
+function statObjs(objs,exSet){return objs.filter(o=>!(P.edgeEx&&o.edge)&&!(exSet&&exSet.has(o.id)));}
+function poreSummary(){
+  const total=I.roiN,area=pore.objs.reduce((s,o)=>s+o.area,0),phi=area/total*100,so=statObjs(pore.objs),cnt=so.length,e=so.map(o=>o.ecd).sort((a,b)=>a-b);
+  let d50=NaN;if(cnt){const byE=so.slice().sort((a,b)=>a.ecd-b.ecd),half=byE.reduce((s,o)=>s+o.area,0)/2;let w=0;for(const o of byE){w+=o.area;if(w>=half){d50=o.ecd;break;}}}
+  const mean=f=>cnt?so.reduce((s,o)=>s+f(o),0)/cnt:NaN,perimTot=pore.objs.reduce((s,o)=>s+o.perim,0),k=kUm();
+  return {phi,area,count:pore.objs.length,cnt,meanEcd:mean(o=>o.ecd),medEcd:percentile(e,.5),d50,ar:mean(o=>o.ar),circ:mean(o=>o.circ),solid:mean(o=>o.solid),
+    specPerim:k?perimTot/(total*k)*1000:perimTot/total,maxEcd:e.length?e[e.length-1]:NaN,so};
+}
+function folkWard(phis){const s=phis.slice().sort((a,b)=>a-b),p=q=>percentile(s,q),p5=p(.05),p16=p(.16),p50=p(.5),p84=p(.84),p95=p(.95);
+  return {Mz:(p16+p50+p84)/3,sd:(p84-p16)/4+(p95-p5)/6.6,sk:(p16+p84-2*p50)/(2*(p84-p16)||1)+(p5+p95-2*p50)/(2*(p95-p5)||1),p16,p50,p84};}
+const sortClass=s=>s<0.35?'very well sorted':s<0.5?'well sorted':s<0.71?'moderately well sorted':s<1?'moderately sorted':s<2?'poorly sorted':s<4?'very poorly sorted':'extremely poorly sorted';
+const skClass=k=>k>0.3?'strongly fine‑skewed':k>0.1?'fine‑skewed':k>=-0.1?'near‑symmetrical':k>=-0.3?'coarse‑skewed':'strongly coarse‑skewed';
+function grainSummary(){
+  const so=statObjs(grain.objs,grain.excluded),cnt=so.length,k=kUm(),mean=f=>cnt?so.reduce((s,o)=>s+f(o),0)/cnt:NaN,e=so.map(o=>o.ecd).sort((a,b)=>a-b);
+  const fw=cnt>=5?folkWard(so.map(o=>-Math.log2(o.ecd))):null;let Mz=NaN;if(fw&&k)Mz=fw.Mz-Math.log2(k/1000);
+  let C=0,S=0;for(const o of so){const a=2*o.orient*Math.PI/180;C+=Math.cos(a);S+=Math.sin(a);}let mo=Math.atan2(S,C)*90/Math.PI;if(mo<0)mo+=180;
+  const gArea=grain.objs.filter(o=>!grain.excluded.has(o.id)).reduce((s,o)=>s+o.area,0);
+  return {so,cnt,meanEcd:mean(o=>o.ecd),medEcd:percentile(e,.5),fw,Mz,ar:mean(o=>o.ar),circ:mean(o=>o.circ),solid:mean(o=>o.solid),meanOrient:mo,R:cnt?Math.hypot(C,S)/cnt:NaN,gArea,
+    density:k?cnt/(I.roiN*k*k/1e6):NaN};
+}
+
+/* =============== steps & tools =============== */
+const STEPS=[{id:'image',t:'Image'},{id:'scale',t:'Scale'},{id:'pores',t:'Pores'},{id:'grains',t:'Grains'},{id:'results',t:'Results'}];
+const TOOLS={select:'Pan & select',roi:'Draw analysis area',calib:'Draw scale line',poreSample:'Tap pores',solidSample:'Tap grains',matrixSample:'Tap matrix / cement',pick:'Pick pore colour',editPore:'Fix pores',merge:'Merge grains',split:'Split grain',exclGrain:'Exclude grain',measure:'Measure',points:'Point count'};
+const HINTS={select:'Drag to pan, pinch or scroll to zoom. Tap a pore or grain to see its measurements.',roi:'Tap one corner of the area to analyse, then the opposite corner.',
+  calib:'Tap one end of the scale bar, then the other end.',poreSample:'Tap inside pores. Tap a pink marker to remove it.',solidSample:'Tap grains, cement or matrix. Tap a yellow marker to remove it.',
+  pick:'Tap inside a typical pore to set the colour range.',editPore:'Tap a missed pore to add it, or a false pore to remove it. Tap a white ✕ to restore.',
+  merge:'Tap a grain, then the neighbour to join it to.',split:'Tap inside each of the two grains that were joined. The cut follows the narrowest point or the visible contact.',matrixSample:'Tap cement, matrix or fine‑grained material that should not count as grains. Tap a green marker to remove it.',exclGrain:'Tap a grain to exclude it, or tap again to include it.',
+  measure:'Tap two points to measure a distance.',points:'Tap a grid point to switch it between pore and solid.'};
+function stepTools(){return {image:['select','roi'],scale:['select','calib'],pores:(P.mode==='samples'||P.mode==='clusters')?['select','poreSample','solidSample','matrixSample','editPore']:P.mode==='hsv'?['select','pick','editPore']:['select','editPore'],
+  grains:['select','merge','split','exclGrain'],results:['select','measure','points']}[step];}
+function renderStepper(){
+  const st=$('#stepper'),idx=STEPS.findIndex(s=>s.id===step);
+  const status={image:I?'Loaded':'Start here',scale:umPerOrig?`${(+umPerOrig.toPrecision(3))} µm/px`:'Optional',pores:I&&pore?`${poreSummary().phi.toFixed(1)}% ${PH().lower}`:'',
+    grains:grain?(grain.stale?'Needs update':`${grain.objs.length} grains`):'',results:''};
+  const done={image:!!I,scale:umPerOrig>0,pores:!!(I&&pore&&pore.n),grains:!!(grain&&!grain.stale),results:false};
+  st.innerHTML=STEPS.map((s,i)=>`<li><button data-go="${s.id}" ${s.id===step?'aria-current="step"':''} class="${done[s.id]&&s.id!==step?'done':''}" ${!I&&i>0?'disabled':''}><span class="num">${done[s.id]&&s.id!==step?'✓':i+1}</span><span class="t"><b>${s.t}</b><small>${status[s.id]||'&nbsp;'}</small></span></button></li>`).join('');
+  $('#backBtn').disabled=idx===0;
+  const nx=STEPS[idx+1];$('#nextBtn').textContent=nx?`Next: ${nx.t}`:'Back to start';
+  $('#nextBtn').disabled=!I;
+}
+$('#stepper').addEventListener('click',e=>{const b=e.target.closest('[data-go]');if(b&&!b.disabled)goStep(b.dataset.go);});
+$('#backBtn').onclick=()=>{const i=STEPS.findIndex(s=>s.id===step);if(i>0)goStep(STEPS[i-1].id);};
+$('#nextBtn').onclick=()=>{const i=STEPS.findIndex(s=>s.id===step);goStep(i<STEPS.length-1?STEPS[i+1].id:'image');};
+function goStep(id){
+  step=id;$$('[data-step]').forEach(p=>p.hidden=p.dataset.step!==id);
+  const def={image:'select',scale:'select',pores:P.mode==='samples'?(samples.pore.length?'select':'poreSample'):P.mode==='hsv'?'pick':'select',grains:'select',results:'select'}[id];
+  L.pores=id!=='grains';L.grains=id==='grains'||id==='results';const wantFill=id==='grains';if(L.fill!==wantFill){L.fill=wantFill;if(grain)buildGrainCanvas();}$('#lyPores').checked=L.pores;$('#lyGrains').checked=L.grains;$('#lyFill').checked=L.fill;
+  if(id==='grains')$('#handTools').hidden=true;
+  setTool(def);
+  if(id==='grains'&&I&&(!grain||grain.stale)){busy(true,'Separating grains…');setTimeout(segmentGrains,40);}
+  $('#dash').hidden=id!=='results';
+  refreshAll();
+  if(window.innerWidth<980&&id!=='image')$('#stepPanel').scrollIntoView({behavior:'smooth',block:'start'});
+}
+function setTool(t){tool=t;pending=null;mergeFirst=null;
+  $('#tools').innerHTML=stepTools().map(k=>`<button data-tool="${k}" aria-pressed="${k===t}">${TOOLS[k]}</button>`).join('');
+  $('#toolhint').textContent=HINTS[t];$('#roiTool').setAttribute('aria-pressed',t==='roi');$$('[data-settool]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.settool===t));updatePC();updateCoach();requestDraw();}
+$('#tools').addEventListener('click',e=>{const b=e.target.closest('[data-tool]');if(b)setTool(b.dataset.tool);});
+$('#roiTool').onclick=()=>setTool('roi');
+$('#cropFull').onclick=()=>analyseAreaFull();
+$('#cropBack').onclick=()=>{if(I&&I.file)loadFile(I.file,false);};
+$('#roiReset').onclick=()=>{if(I){setRoi(null);}};
+
+function refreshAll(){
+  renderNextHint();
+  if(!I){renderStepper();return;}
+  renderStepper();renderPoreReadout();renderGrainStatus();renderKeyStats();renderSel();renderMeasures();updatePC();renderChip();
+  $('#sampleCount').textContent=`${samples.pore.length} pore, ${samples.solid.length} grain and ${samples.matrix.length} matrix example${samples.matrix.length===1?'':'s'}.`+(samples.pore.length?'':' Start by tapping a pore.');
+  $('#balField').hidden=!(samples.solid.length||samples.matrix.length);$('#tolField').hidden=!!(samples.solid.length||samples.matrix.length);
+  $('#scaleInfo').textContent=umPerOrig?`✓ Scale in use: ${+umPerOrig.toPrecision(4)} µm per original pixel. The whole image is ${nf(I.origW*umPerOrig/1000)} × ${nf(I.origH*umPerOrig/1000)} mm (${I.origW} × ${I.origH} px).`:`No scale set. The image is ${I.origW} × ${I.origH} px.`;
+  if(dashVisible())renderDashboard();
+  requestDraw();
+}
+function renderChip(){const c=$('#chip');if(!pore){c.hidden=true;return;}c.hidden=false;
+  c.innerHTML=`<span>${PH().name} <b>${poreSummary().phi.toFixed(1)}%</b></span>`+(grain?`<span>Grains <b>${grain.objs.length}</b>${grain.stale?' (out of date)':''}</span>`:'');}
+function renderPoreReadout(){const s=poreSummary();$('#phi').innerHTML=`${s.phi.toFixed(1)}<small>%</small>`;$('#colPore').style.height=Math.min(100,s.phi)+'%';
+  $('#phiSub').textContent=`${PH().name}, ${s.count.toLocaleString()} separate areas`+(pore.matN?`. Matrix / cement ${(pore.matN/I.roiN*100).toFixed(1)}%`:'');}
+function renderGrainStatus(){
+  ['grainR','neck','edgeW','darkCut'].forEach(k=>{$('#'+k).value=P[k];});
+  $('#grainRo').textContent=(P.grainRUser?'':'auto, ')+P.grainR+' px'+(kUm()?` (${nf(Lv(P.grainR))} µm)`:'');$('#necko').textContent=P.neck+'%';$('#edgeWo').textContent=P.edgeW?P.edgeW+'%':'off';$('#darkCuto').textContent=P.darkCut||'off';
+  $('#grainStatus').textContent=grain?`${P.gMethod==='opening'?`Erode & dilate, r = ${P.openR} original px, ${P.openConn}‑connected: `:''}${grain.objs.length} grains found${grain.excluded.size?`, ${grain.excluded.size} excluded`:''}${grain.stale?'. Pores have changed; grains will update when you return here.':'.'}`:'Grains are separated when you open this step.';
+  $('#staleWarn').hidden=!(grain&&grain.stale);
+}
+function renderKeyStats(){
+  if(step!=='results')return;const s=poreSummary(),u=uL(),rows=[[PH().name,`${s.phi.toFixed(1)}%`],...(pore.matN?[['Matrix / cement',`${(pore.matN/I.roiN*100).toFixed(1)}%`]]:[]),['Pores',`${s.count.toLocaleString()} (${s.cnt.toLocaleString()} in statistics)`],
+    ['Pore mean ECD',`${nf(Lv(s.meanEcd))} ${u}`],['Pore D50 by area',`${nf(Lv(s.d50))} ${u}`],['Pore mean circularity',nf(s.circ)],
+    ['Specific pore perimeter',kUm()?`${nf(s.specPerim)} mm⁻¹`:`${s.specPerim.toFixed(4)} px⁻¹`]];
+  if(grain){const g=grainSummary();rows.push(['Grains',`${grain.objs.length.toLocaleString()} (${g.cnt.toLocaleString()} in statistics)`],['Grain mean ECD',`${nf(Lv(g.meanEcd))} ${u}`]);
+    if(g.fw){if(kUm())rows.push(['Graphic mean size',`${g.Mz.toFixed(2)} φ, ${wentworth(Math.pow(2,-g.Mz))}`]);rows.push(['Sorting',`${g.fw.sd.toFixed(2)} φ, ${sortClass(g.fw.sd)}`],['Skewness',`${g.fw.sk.toFixed(2)}, ${skClass(g.fw.sk)}`]);}
+    rows.push(['Grain mean aspect ratio',nf(g.ar)],['Grain fabric',`${g.meanOrient.toFixed(0)}°, strength ${g.R.toFixed(2)}`]);if(kUm())rows.push(['Grains per mm²',nf(g.density)]);}
+  else rows.push(['Grains','not separated yet']);
+  $('#keyStats').innerHTML=rows.map(r=>`<dt>${r[0]}</dt><dd>${r[1]}</dd>`).join('');
+}
+
+/* =============== point count & measures =============== */
+function buildPoints(){if(!I)return;const W=roi.x1-roi.x0,H=roi.y1-roi.y0,cols=Math.max(1,Math.round(Math.sqrt(nPts*W/H))),rows=Math.max(1,Math.round(nPts/cols));
+  pts=[];for(let r=0;r<rows;r++)for(let c=0;c<cols;c++)pts.push({x:roi.x0+(c+.5)*W/cols,y:roi.y0+(r+.5)*H/rows,ov:null});}
+const autoPore=p=>pore.mask[(p.y|0)*I.W+(p.x|0)],ptPore=p=>p.ov!==null?p.ov:autoPore(p);
+function pcStats(){const n=pts.length;let k=0,corr=0;for(const p of pts){if(ptPore(p))k++;if(p.ov!==null)corr++;}const p=k/n;return {n,k,p,ci:1.96*Math.sqrt(p*(1-p)/n),corr};}
+function updatePC(){const el=$('#pcOut');if(!I)return;if(tool!=='points'){el.hidden=true;return;}el.hidden=false;
+  const r=pcStats();el.innerHTML=`Point count: <strong>${(r.p*100).toFixed(1)}% ± ${(r.ci*100).toFixed(1)}</strong> (95%), ${r.k} of ${r.n} points on pore${r.corr?`, ${r.corr} corrected`:''}. Image analysis gave ${poreSummary().phi.toFixed(1)}%.`;}
+function lenText(m){const d=Math.hypot(m.b.x-m.a.x,m.b.y-m.a.y),k=kUm();if(m===calibLine)return `${(d/I.scaleF).toFixed(1)} px`;return k?`${nf(d*k)} µm`:`${nf(d/I.scaleF)} px`;}
+function renderMeasures(){const ul=$('#mList');
+  ul.innerHTML=measures.map((m,i)=>{let ang=(-Math.atan2(m.b.y-m.a.y,m.b.x-m.a.x)*180/Math.PI)%180;if(ang<0)ang+=180;return `<li><span>Line ${i+1}: ${lenText(m)} at ${ang.toFixed(0)}°</span><button data-del="${i}">Remove</button></li>`;}).join('');}
+$('#mList').addEventListener('click',e=>{const b=e.target.closest('[data-del]');if(!b)return;measures.splice(+b.dataset.del,1);renderMeasures();requestDraw();});
+
+/* =============== viewer =============== */
+const stage=$('#stage'),vc=$('#vc'),vx=vc.getContext('2d'),V={s:1,tx:0,ty:0,cw:1,ch:1,dpr:1,fitted:true};
+function resize(){const r=stage.getBoundingClientRect();V.cw=r.width;V.ch=r.height;V.dpr=window.devicePixelRatio||1;vc.width=Math.round(r.width*V.dpr);vc.height=Math.round(r.height*V.dpr);if(V.fitted)fit();requestDraw();}
+new ResizeObserver(resize).observe(stage);
+const fitScale=()=>I?Math.min(V.cw/I.W,V.ch/I.H)*0.98:1;
+function fit(){if(!I)return;V.s=fitScale();V.tx=(V.cw-I.W*V.s)/2;V.ty=(V.ch-I.H*V.s)/2;V.fitted=true;requestDraw();}
+function zoomAt(sx,sy,f){if(!I)return;const ns=Math.min(60,Math.max(fitScale()*0.5,V.s*f));f=ns/V.s;V.tx=sx-(sx-V.tx)*f;V.ty=sy-(sy-V.ty)*f;V.s=ns;V.fitted=false;requestDraw();}
+function zoomToObj(o){const [x0,y0,x1,y1]=o.bbox,w=x1-x0+1,h=y1-y0+1,s=Math.min(60,Math.max(fitScale(),Math.min(V.cw/(w*3),V.ch/(h*3))));V.s=s;V.tx=V.cw/2-o.cx*s;V.ty=V.ch/2-o.cy*s;V.fitted=false;requestDraw();}
+const toImg=(sx,sy)=>[(sx-V.tx)/V.s,(sy-V.ty)/V.s];
+$('#zin').onclick=()=>zoomAt(V.cw/2,V.ch/2,1.6);$('#zout').onclick=()=>zoomAt(V.cw/2,V.ch/2,1/1.6);$('#zfit').onclick=fit;
+$('#z11').onclick=()=>{if(!I)return;const [ix,iy]=toImg(V.cw/2,V.ch/2);V.s=1/V.dpr;V.tx=V.cw/2-ix*V.s;V.ty=V.ch/2-iy*V.s;V.fitted=false;requestDraw();};
+let rafId=0;function requestDraw(){if(!rafId)rafId=requestAnimationFrame(()=>{rafId=0;vx.setTransform(1,0,0,1,0,0);vx.clearRect(0,0,vc.width,vc.height);if(I)drawScene(vx,V.s,V.tx,V.ty,V.dpr,V.cw,V.ch,false);});}
+function drawScene(c,s,tx,ty,pr,sw,sh,exporting){
+  c.setTransform(pr*s,0,0,pr*s,pr*tx,pr*ty);c.imageSmoothingEnabled=s*pr<2.5;c.drawImage(I.base,0,0);
+  if(L.clmap&&I.clCanvas&&!L.hide&&!exporting){c.globalAlpha=Math.max(L.opacity,0.75);c.drawImage(I.clCanvas,0,0);c.globalAlpha=1;}
+  else if(!L.hide||exporting){c.globalAlpha=L.opacity;if(L.grains&&grainCanvas)c.drawImage(grainCanvas,0,0);if(L.pores&&poreCanvas)c.drawImage(poreCanvas,0,0);c.globalAlpha=1;}
+  if(hlCanvas&&!exporting)c.drawImage(hlCanvas,0,0);
+  const lw=1/s;
+  // outside analysis area
+  if(roi&&(roi.x0>0||roi.y0>0||roi.x1<I.W||roi.y1<I.H)){c.fillStyle='rgba(0,0,0,.55)';c.beginPath();c.rect(0,0,I.W,I.H);c.rect(roi.x0,roi.y0,roi.x1-roi.x0,roi.y1-roi.y0);c.fill('evenodd');
+    c.setLineDash([6*lw,4*lw]);c.lineWidth=1.5*lw;c.strokeStyle='#fff';c.strokeRect(roi.x0,roi.y0,roi.x1-roi.x0,roi.y1-roi.y0);c.setLineDash([]);}
+  const o=objOf(sel);
+  if(o&&!exporting){if(selCanvas)c.drawImage(selCanvas,selBox[0],selBox[1]);
+    c.lineWidth=1.6*lw;c.strokeStyle='#28e6ff';c.beginPath();o.hull.forEach((p,i)=>i?c.lineTo(p[0],p[1]):c.moveTo(p[0],p[1]));c.closePath();c.stroke();
+    c.setLineDash([5*lw,4*lw]);c.strokeStyle='#fff';c.beginPath();c.ellipse(o.cx,o.cy,o.major/2,o.minor/2,o.theta,0,Math.PI*2);c.stroke();c.setLineDash([]);
+    if(o.fa){c.strokeStyle='#ffd400';c.beginPath();c.moveTo(o.fa[0],o.fa[1]);c.lineTo(o.fb[0],o.fb[1]);c.stroke();}}
+  if(step==='pores'&&!exporting){
+    const r=7*lw;c.lineWidth=2*lw;
+    for(const sm of samples.pore){c.beginPath();c.arc(sm.x,sm.y,r,0,Math.PI*2);c.fillStyle='#d6247f';c.fill();c.strokeStyle='#fff';c.stroke();}
+    for(const sm of samples.solid){c.beginPath();c.rect(sm.x-r,sm.y-r,2*r,2*r);c.fillStyle='#ffcc00';c.fill();c.strokeStyle='#000';c.stroke();}
+    for(const sm of samples.matrix){c.beginPath();c.moveTo(sm.x,sm.y-r*1.2);c.lineTo(sm.x+r*1.1,sm.y+r*.8);c.lineTo(sm.x-r*1.1,sm.y+r*.8);c.closePath();c.fillStyle='#1fa36b';c.fill();c.strokeStyle='#fff';c.stroke();}
+    const q=6*lw;for(const e of excl){c.strokeStyle=e.active?'#fff':'rgba(255,255,255,.4)';c.beginPath();c.moveTo(e.x-q,e.y-q);c.lineTo(e.x+q,e.y+q);c.moveTo(e.x+q,e.y-q);c.lineTo(e.x-q,e.y+q);c.stroke();}}
+  const line=(a,b,col)=>{c.lineWidth=4*lw;c.strokeStyle='rgba(0,0,0,.6)';c.beginPath();c.moveTo(a.x,a.y);c.lineTo(b.x,b.y);c.stroke();c.lineWidth=2*lw;c.strokeStyle=col;c.stroke();
+    for(const p of [a,b]){c.beginPath();c.arc(p.x,p.y,3.5*lw,0,Math.PI*2);c.fillStyle=col;c.fill();}};
+  measures.forEach(m=>line(m.a,m.b,'#7CFFB2'));if(calibLine)line(calibLine.a,calibLine.b,'#ffb020');
+  if(pending){if(tool==='roi'){c.strokeStyle='#fff';c.lineWidth=2*lw;c.beginPath();c.moveTo(pending.x-10*lw,pending.y);c.lineTo(pending.x+10*lw,pending.y);c.moveTo(pending.x,pending.y-10*lw);c.lineTo(pending.x,pending.y+10*lw);c.stroke();}
+    else{c.beginPath();c.arc(pending.x,pending.y,5*lw,0,Math.PI*2);c.fillStyle=tool==='calib'?'#ffb020':tool==='split'?'#ff4040':'#7CFFB2';c.fill();c.lineWidth=1.5*lw;c.strokeStyle='#000';c.stroke();}}
+  if(mergeFirst&&grain){const mo=grain.byId.get(mergeFirst);if(mo){c.lineWidth=2.5*lw;c.strokeStyle='#ff4040';c.beginPath();mo.hull.forEach((p,i)=>i?c.lineTo(p[0],p[1]):c.moveTo(p[0],p[1]));c.closePath();c.stroke();}}
+  if(tool==='points'){const r=Math.max(2.5*lw,Math.min(I.W,I.H)/220),ix0=-tx/s,iy0=-ty/s,ix1=(sw-tx)/s,iy1=(sh-ty)/s;
+    for(const p of pts){if(p.x<ix0-r||p.x>ix1+r||p.y<iy0-r||p.y>iy1+r)continue;const pp=ptPore(p);c.beginPath();
+      if(p.ov!==null)c.rect(p.x-r,p.y-r,2*r,2*r);else c.arc(p.x,p.y,r,0,Math.PI*2);
+      c.fillStyle=pp?'#ffd400':'rgba(255,255,255,.2)';c.fill();c.lineWidth=2.4*lw;c.strokeStyle='#000';c.stroke();c.lineWidth=1.2*lw;c.strokeStyle=pp?'#ffd400':'#fff';c.stroke();}}
+  c.setTransform(pr,0,0,pr,0,0);c.font='600 12px "Instrument Sans",system-ui,sans-serif';c.textBaseline='middle';
+  const label=(m,col)=>{const mx=(m.a.x+m.b.x)/2*s+tx,my=(m.a.y+m.b.y)/2*s+ty,t=lenText(m),w=c.measureText(t).width+10;c.fillStyle='rgba(0,0,0,.72)';c.fillRect(mx-w/2,my-21,w,18);c.fillStyle=col;c.textAlign='center';c.fillText(t,mx,my-12);};
+  measures.forEach(m=>label(m,'#7CFFB2'));if(calibLine)label(calibLine,'#ffb020');
+  const k=kUm(),target=Math.min(140,sw*0.28)/s;let lenImg,txt;
+  if(k){const um=niceNum(target*k);lenImg=um/k;txt=um>=1000?`${um/1000} mm`:`${um} µm`;}else{const px=niceNum(target/I.scaleF);lenImg=px*I.scaleF;txt=`${px} px`;}
+  const bw=lenImg*s,bx=14,by=sh-22;c.fillStyle='rgba(0,0,0,.6)';c.fillRect(bx-6,by-20,bw+12,30);c.fillStyle='#fff';c.fillRect(bx,by,bw,4);c.textAlign='left';c.fillText(txt,bx,by-9);
+}
+
+/* =============== pointer =============== */
+const ptrs=new Map();let gesture=null;
+vc.addEventListener('pointerdown',e=>{vc.setPointerCapture(e.pointerId);const r=vc.getBoundingClientRect();ptrs.set(e.pointerId,{x:e.clientX-r.left,y:e.clientY-r.top});
+  if(ptrs.size===1)gesture={type:'tap',sx:e.clientX-r.left,sy:e.clientY-r.top,t:performance.now()};
+  else if(ptrs.size===2){const [a,b]=[...ptrs.values()];gesture={type:'pinch',d:Math.hypot(a.x-b.x,a.y-b.y),mx:(a.x+b.x)/2,my:(a.y+b.y)/2};}});
+vc.addEventListener('pointermove',e=>{if(!ptrs.has(e.pointerId)||!gesture)return;const r=vc.getBoundingClientRect(),prev=ptrs.get(e.pointerId),cur={x:e.clientX-r.left,y:e.clientY-r.top};ptrs.set(e.pointerId,cur);
+  if(gesture.type==='pinch'&&ptrs.size===2){const [a,b]=[...ptrs.values()],d=Math.hypot(a.x-b.x,a.y-b.y),mx=(a.x+b.x)/2,my=(a.y+b.y)/2;if(gesture.d>0)zoomAt(mx,my,d/gesture.d);V.tx+=mx-gesture.mx;V.ty+=my-gesture.my;gesture.d=d;gesture.mx=mx;gesture.my=my;requestDraw();}
+  else if(ptrs.size===1&&(gesture.type==='tap'||gesture.type==='pan')){if(gesture.type==='tap'&&Math.hypot(cur.x-gesture.sx,cur.y-gesture.sy)>6)gesture.type='pan';
+    if(gesture.type==='pan'){V.tx+=cur.x-prev.x;V.ty+=cur.y-prev.y;V.fitted=false;requestDraw();}}});
+const endPtr=e=>{if(!ptrs.has(e.pointerId))return;ptrs.delete(e.pointerId);
+  if(gesture&&gesture.type==='tap'&&ptrs.size===0&&e.type==='pointerup'&&performance.now()-gesture.t<700){const [ix,iy]=toImg(gesture.sx,gesture.sy);onTap(ix,iy);}
+  if(ptrs.size===0)gesture=null;else if(gesture&&gesture.type==='pinch')gesture={type:'hold'};};
+vc.addEventListener('pointerup',endPtr);vc.addEventListener('pointercancel',endPtr);
+vc.addEventListener('wheel',e=>{e.preventDefault();const r=vc.getBoundingClientRect();zoomAt(e.clientX-r.left,e.clientY-r.top,Math.exp(-e.deltaY*0.0018));},{passive:false});
+function nearLabel(lab,x,y,rad){const W=I.W,H=I.H,xi=x|0,yi=y|0;if(lab[yi*W+xi])return [lab[yi*W+xi],xi,yi];let best=null,bd=1e9;
+  for(let dy=-rad;dy<=rad;dy++)for(let dx=-rad;dx<=rad;dx++){const xx=xi+dx,yy=yi+dy;if(xx<0||yy<0||xx>=W||yy>=H)continue;const l=lab[yy*W+xx];if(l){const d=dx*dx+dy*dy;if(d<bd){bd=d;best=[l,xx,yy];}}}return best;}
+function onTap(x,y){onTap0(x,y);updateCoach();}
+function onTap0(x,y){
+  if(!I)return;
+  if(tool==='roi'){if(!pending){pending={x:Math.max(0,Math.min(I.W,x)),y:Math.max(0,Math.min(I.H,y))};requestDraw();return;}
+    const a=pending;pending=null;setRoi({x0:a.x,y0:a.y,x1:x,y1:y});buildPoints();setTool('select');toast('Analysis area set');return;}
+  if(x<0||y<0||x>=I.W||y>=I.H)return;
+  const W=I.W,i=(y|0)*W+(x|0),rr=12/V.s;
+  switch(tool){
+  case 'select':{
+    if(L.pores){const h=nearLabel(pore.lab,x,y,Math.min(10,Math.ceil(6/V.s)));if(h){select('pore',h[0],h[1],h[2]);return;}}
+    if(grain&&grain.lab[i]){select('grain',grain.lab[i],x,y);return;}clearSel();return;}
+  case 'poreSample':case 'solidSample':case 'matrixSample':{
+    if(P.mode!=='samples')ensureSamples();
+    const arr=tool==='poreSample'?samples.pore:tool==='solidSample'?samples.solid:samples.matrix,j=arr.findIndex(s=>Math.hypot(s.x-x,s.y-y)<=rr);
+    if(j>=0)arr.splice(j,1);else{if(!I.roiMask[i]){toast('Tap inside the analysis area');return;}arr.push({x,y,lab:sampleLab(x,y)});}
+    scheduleDetect();return;}
+  case 'pick':{const d=I.rgba;let r=0,g=0,b=0,c=0;for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++){const xx=Math.min(W-1,Math.max(0,(x|0)+dx)),yy=Math.min(I.H-1,Math.max(0,(y|0)+dy)),p=(yy*W+xx)*4;r+=d[p];g+=d[p+1];b+=d[p+2];c++;}
+    const [h,s,v]=hsv(r/c,g/c,b/c);if(s<0.08){toast('That spot has almost no colour. Try Tap examples or Brightness.');return;}
+    P.hueC=Math.round(h)%360;P.satMin=Math.round(Math.min(.9,Math.max(.05,s*.55))*100)/100;P.valMin=Math.round(Math.min(.9,v*.45)*100)/100;syncUI();runDetect();toast('Colour range set');return;}
+  case 'editPore':{
+    const ei=excl.findIndex(e=>Math.hypot(e.x-x,e.y-y)<=rr);
+    if(ei>=0){const [e]=excl.splice(ei,1);ops.push({t:'unexcl',e});runDetect();toast('Pore restored');return;}
+    if(pore.mask[i]){excl.push({x,y});ops.push({t:'excl'});if(sel&&sel.kind==='pore')clearSel();runDetect();toast('Pore removed');return;}
+    floodAdd(x|0,y|0);return;}
+  case 'merge':{if(!grain)return;const g=grain.lab[i];if(!g){toast('Tap on a grain');return;}
+    if(!mergeFirst){mergeFirst=g;requestDraw();toast('Now tap the neighbouring grain');return;}
+    if(g===mergeFirst){mergeFirst=null;requestDraw();return;}
+    const a=mergeFirst;mergeFirst=null;mergeGrains(a,g);toast(`Grains ${a} and ${g} merged`);return;}
+  case 'split':{if(!grain)return;if(!pending){pending={x,y};requestDraw();return;}const a=pending;pending=null;const r=splitGrain(a,{x,y});if(r===true)toast('Grain split');requestDraw();return;}
+  case 'exclGrain':{if(!grain)return;const g=grain.lab[i];if(!g)return;snapGrains();if(grain.excluded.has(g))grain.excluded.delete(g);else grain.excluded.add(g);buildGrainCanvas();refreshAll();return;}
+  case 'measure':case 'calib':{
+    if(!pending){pending={x,y};requestDraw();return;}const m={a:pending,b:{x,y}};pending=null;
+    if(tool==='measure'){measures.push(m);renderMeasures();}
+    else{calibLine=m;$('#calibPx').textContent=(Math.hypot(m.b.x-m.a.x,m.b.y-m.a.y)/I.scaleF).toFixed(1);$('#calibBox').hidden=false;showScaleBox('bar');setTimeout(()=>$('#calibUm').focus(),50);}
+    requestDraw();return;}
+  case 'points':{const lim=Math.max(14/V.s,Math.min(I.W,I.H)/110);let best=null,bd=1e9;for(const p of pts){const d=Math.hypot(p.x-x,p.y-y);if(d<bd){bd=d;best=p;}}
+    if(best&&bd<=lim){const want=ptPore(best)?0:1;best.ov=want===autoPore(best)?null:want;updatePC();requestDraw();}return;}
+  }
+}
+function floodAdd(x,y){
+  const {W,H,n,rgba,vis,add,roiMask}=I;vis.fill(0);let r0=0,g0=0,b0=0,c=0;
+  for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){const xx=Math.min(W-1,Math.max(0,x+dx)),yy=Math.min(H-1,Math.max(0,y+dy)),p=(yy*W+xx)*4;r0+=rgba[p];g0+=rgba[p+1];b0+=rgba[p+2];c++;}
+  r0/=c;g0/=c;b0/=c;const tol2=P.fillTol*P.fillTol,cap=Math.round(n*0.03),stack=[y*W+x],out=[];vis[y*W+x]=1;
+  while(stack.length){const i=stack.pop(),p=i*4,dr=rgba[p]-r0,dg=rgba[p+1]-g0,db=rgba[p+2]-b0;if(dr*dr+dg*dg+db*db>tol2||!roiMask[i])continue;
+    out.push(i);if(out.length>cap){toast('The fill spread too far. Lower the add‑pore tolerance or zoom in.');return;}const xx=i%W;
+    if(xx>0&&!vis[i-1]){vis[i-1]=1;stack.push(i-1);}if(xx<W-1&&!vis[i+1]){vis[i+1]=1;stack.push(i+1);}if(i>=W&&!vis[i-W]){vis[i-W]=1;stack.push(i-W);}if(i<n-W&&!vis[i+W]){vis[i+W]=1;stack.push(i+W);}}
+  if(!out.length)return;const idx=Int32Array.from(out);for(const i of idx)add[i]++;ops.push({t:'add',idx});runDetect();toast(`Added ${out.length.toLocaleString()} pixels as pore`);
+}
+
+/* =============== plots =============== */
+function dashVisible(){return step==='results'&&!$('#dash').hidden;}
+function col(){const cs=getComputedStyle(document.documentElement),g=n=>cs.getPropertyValue(n).trim();return {ink:g('--ink'),muted:g('--muted'),line:g('--line'),pore:g('--pore'),grain:g('--grain-ink'),epoxy:g('--epoxy'),surface:g('--surface'),other:g('--other'),solid:g('--solid')};}
+function prep(cv,h){const w=Math.max(260,cv.clientWidth||cv.parentElement.clientWidth-24),d=window.devicePixelRatio||1;cv.width=Math.round(w*d);cv.height=Math.round(h*d);cv.style.height=h+'px';
+  const c=cv.getContext('2d');c.setTransform(d,0,0,d,0,0);const C=col();c.fillStyle=C.surface;c.fillRect(0,0,w,h);cv._hits=[];return {c,w,h,C};}
+function linS(d0,d1,r0,r1){return v=>r0+(v-d0)/((d1-d0)||1)*(r1-r0);}
+function logS(d0,d1,r0,r1){const a=Math.log10(d0),b=Math.log10(d1);return v=>r0+(Math.log10(Math.max(v,1e-12))-a)/((b-a)||1)*(r1-r0);}
+function linT(a,b,n){const st=niceNum((b-a)/(n||5)||1),t=[];for(let v=Math.ceil(a/st-1e-9)*st;v<=b+st*1e-6;v+=st)t.push(+v.toPrecision(10));return t;}
+function logT(a,b){const t=[];for(let e=Math.floor(Math.log10(a));e<=Math.ceil(Math.log10(b));e++)for(const m of [1,2,5]){const v=m*Math.pow(10,e);if(v>=a*0.999&&v<=b*1.001)t.push(v);}return t.length>=2?t:[a,b];}
+function axes(c,C,box,xs,ys,xt,yt,fx,fy,xl,yl){
+  c.font='11px "Instrument Sans",system-ui,sans-serif';c.lineWidth=1;
+  c.textAlign='right';c.textBaseline='middle';
+  for(const t of yt){const y=ys(t);c.strokeStyle=C.line;c.beginPath();c.moveTo(box.l,y);c.lineTo(box.r,y);c.stroke();c.fillStyle=C.muted;c.fillText(fy(t),box.l-5,y);}
+  c.textAlign='center';c.textBaseline='top';let last=-1e9;
+  for(const t of xt){const x=xs(t);if(x<box.l-1||x>box.r+1)continue;c.strokeStyle=C.muted;c.beginPath();c.moveTo(x,box.b);c.lineTo(x,box.b+4);c.stroke();
+    const s=fx(t),w=c.measureText(s).width;if(x-w/2>last+4){c.fillStyle=C.muted;c.fillText(s,x,box.b+6);last=x+w/2;}}
+  c.strokeStyle=C.muted;c.beginPath();c.moveTo(box.l,box.b);c.lineTo(box.r,box.b);c.stroke();
+  c.fillStyle=C.ink;c.font='12px "Instrument Sans",system-ui,sans-serif';c.textBaseline='bottom';c.fillText(xl,(box.l+box.r)/2,box.H-2);
+  if(yl){c.save();c.translate(12,(box.t+box.b)/2);c.rotate(-Math.PI/2);c.textBaseline='middle';c.fillText(yl,0,0);c.restore();}
+}
+function empty(cv,msg){const {c,w,h,C}=prep(cv,120);c.fillStyle=C.muted;c.font='13px "Instrument Sans",system-ui,sans-serif';c.textAlign='center';c.textBaseline='middle';c.fillText(msg,w/2,h/2);}
+const fmtV=v=>Math.abs(v)>=1000?(v/1000)+'k':String(+v.toPrecision(3));
+function binIds(objs,vals,edges){const B=edges.length-1,ids=Array.from({length:B},()=>[]);vals.forEach((v,i)=>{let k=0;while(k<B-1&&v>=edges[k+1])k++;ids[k].push(objs[i]);});return ids;}
+function sizeHist(cv,o){
+  // o: objs, val(obj) -> x (already in display units), log, weight(obj), color, cum label, unitFmt, xLabel, yLabel, kind, markers
+  const {objs}=o;if(!objs.length){empty(cv,o.emptyMsg);return;}
+  const {c,w,h,C}=prep(cv,250),box={l:46,r:w-40,t:14,b:h-40,H:h};
+  const vals=objs.map(o.val);let lo=Math.min(...vals),hi=Math.max(...vals);
+  let edges=[];
+  if(o.binW){lo=Math.floor(lo/o.binW)*o.binW;hi=Math.ceil((hi+1e-9)/o.binW)*o.binW;if(hi<=lo)hi=lo+o.binW;for(let v=lo;v<=hi+1e-9;v+=o.binW)edges.push(+v.toFixed(6));}
+  else{const a=Math.log10(lo),b=Math.log10(hi*1.0001),B=Math.max(6,Math.min(24,Math.round(Math.sqrt(objs.length)*1.5)));for(let i=0;i<=B;i++)edges.push(Math.pow(10,a+(b-a)*i/B));}
+  const groups=binIds(objs,vals,edges),tot=objs.reduce((s,ob)=>s+o.weight(ob),0)||1;
+  const pct=groups.map(g=>g.reduce((s,ob)=>s+o.weight(ob),0)/tot*100),ymax=niceNum(Math.max(...pct)*1.1)||1;
+  const xs=o.binW?linS(edges[0],edges[edges.length-1],box.l,box.r):logS(edges[0],edges[edges.length-1],box.l,box.r),ys=linS(0,ymax,box.b,box.t);
+  const xt=o.binW?linT(edges[0],edges[edges.length-1],8):logT(edges[0],edges[edges.length-1]);
+  axes(c,C,box,xs,ys,xt,linT(0,ymax,4),o.fx||fmtV,v=>v+'%',o.xLabel,o.yLabel);
+  for(let k=0;k<groups.length;k++){const x0=xs(edges[k])+1,x1=xs(edges[k+1])-1,y=ys(pct[k]);c.fillStyle=o.color;c.globalAlpha=hl&&hl.bin===k&&hl.plot===o.id?1:.78;c.fillRect(x0,y,Math.max(1,x1-x0),box.b-y);c.globalAlpha=1;
+    if(groups[k].length)cv._hits.push({x0,x1,y0:box.t,y1:box.b,fn:()=>{setHighlight(o.kind,new Set(groups[k].map(g=>g.id)),`${groups[k].length} ${o.kind==='pore'?'pores':'grains'}, ${o.fx?o.fx(edges[k]):fmtV(edges[k])}–${o.fx?o.fx(edges[k+1]):fmtV(edges[k+1])} ${o.unit}`);hl.bin=k;hl.plot=o.id;drawPlot(o.id);}});}
+  // cumulative
+  const ys2=linS(0,100,box.b,box.t);let acc=0;c.strokeStyle=C.ink;c.lineWidth=2;c.beginPath();c.moveTo(xs(edges[0]),ys2(0));
+  for(let k=0;k<groups.length;k++){acc+=pct[k];c.lineTo(xs(edges[k+1]),ys2(acc*100/ (pct.reduce((a,b)=>a+b,0)||1)));}c.stroke();
+  c.fillStyle=C.muted;c.font='11px "Instrument Sans",system-ui,sans-serif';c.textAlign='left';c.textBaseline='middle';
+  for(const t of [0,50,100]){c.fillText(t+'%',box.r+5,ys2(t));}
+  if(o.markers)for(const [v,lab] of o.markers){if(!Number.isFinite(v))continue;const x=xs(v);c.setLineDash([4,3]);c.strokeStyle=C.epoxy;c.lineWidth=1.3;c.beginPath();c.moveTo(x,box.t);c.lineTo(x,box.b);c.stroke();c.setLineDash([]);
+    c.fillStyle=C.epoxy;c.textAlign='center';c.textBaseline='bottom';c.fillText(lab,x,box.t+10);}
+}
+function drawComp(){
+  const cv=$('#pl-comp');if(!pore){empty(cv,'Load an image');return;}
+  const {c,w,h,C}=prep(cv,70),tot=I.roiN,pA=pore.objs.reduce((s,o)=>s+o.area,0),mA=pore.matN||0,gA=grain?grainSummary().gArea:0,oA=Math.max(0,tot-pA-gA-mA);C.matrix=getComputedStyle(document.documentElement).getPropertyValue('--matrix').trim();
+  let parts=grain?[[PH().name,pA,C.pore],['Grains',gA,C.grain],['Matrix / cement',mA,C.matrix],['Other (excluded or unassigned)',oA,C.other]]:[[PH().name,pA,C.pore],['Matrix / cement',mA,C.matrix],['Everything else',Math.max(0,tot-pA-mA),C.solid]];parts=parts.filter(p2=>p2[1]>0||p2[0]===PH().name);
+  let x=0;const bh=30,y=14;for(const [n,a,cl] of parts){const ww=a/tot*w;c.fillStyle=cl;c.fillRect(x,y,ww,bh);x+=ww;}
+  if(tool==='points'||pts.some(p=>p.ov!==null)){const r=pcStats(),px=r.p*w;c.strokeStyle=C.ink;c.lineWidth=2;c.beginPath();c.moveTo(px,y-6);c.lineTo(px,y+bh+6);c.stroke();
+    c.fillStyle=C.ink;c.font='11px "Instrument Sans",system-ui,sans-serif';c.textAlign=px>w-120?'right':'left';c.textBaseline='top';c.fillText(` point count ${(r.p*100).toFixed(1)}% `,px,y+bh+6);}
+  $('#compLegend').innerHTML=parts.map(([n,a,cl])=>`<span><i class="sw" style="background:${cl}"></i>${n}: <b>${(a/tot*100).toFixed(1)}%</b></span>`).join('');
+  $('#nt-comp').textContent=grain?`Grains cover ${(gA/tot*100).toFixed(1)}% of the analysed area. If “other solid” is large, cement or matrix may need excluding in step 4.`:'Separate grains in step 4 to split the solid part.';
+}
+function drawPSD(){
+  const s=poreSummary(),k=kUm(),u=uL();
+  sizeHist($('#pl-psd'),{id:'psd',objs:s.so,val:o=>Lv(o.ecd),weight:o=>o.area,color:col().pore,xLabel:`Pore diameter, ECD (${u}, log scale)`,yLabel:'% of pore area',kind:'pore',unit:u,emptyMsg:'No pores detected yet',
+    markers:[[Lv(s.d50),'D50']]});
+  $('#nt-psd').textContent=s.so.length?`Half the pore area sits in pores larger than ${nf(Lv(s.d50))} ${u}. Mean pore diameter ${nf(Lv(s.meanEcd))} ${u}.`:'';
+}
+function drawConc(){
+  const cv=$('#pl-conc'),so=pore.objs.slice().sort((a,b)=>b.area-a.area);if(so.length<2){empty(cv,'Not enough pores');return;}
+  const {c,w,h,C}=prep(cv,230),box={l:46,r:w-14,t:12,b:h-40,H:h},xs=linS(0,100,box.l,box.r),ys=linS(0,100,box.b,box.t);
+  axes(c,C,box,xs,ys,[0,20,40,60,80,100],[0,25,50,75,100],v=>v+'%',v=>v+'%','Share of pores, largest first','% of pore area');
+  c.setLineDash([4,4]);c.strokeStyle=C.muted;c.beginPath();c.moveTo(xs(0),ys(0));c.lineTo(xs(100),ys(100));c.stroke();c.setLineDash([]);
+  const tot=so.reduce((s,o)=>s+o.area,0),N=so.length;let acc=0,at10=0;c.strokeStyle=C.pore;c.lineWidth=2.4;c.beginPath();c.moveTo(xs(0),ys(0));
+  so.forEach((o,i)=>{acc+=o.area;const xp=(i+1)/N*100;if(i<Math.max(1,Math.round(N*0.1)))at10=acc/tot*100;if(N<2000||i%Math.ceil(N/2000)===0||i===N-1)c.lineTo(xs(xp),ys(acc/tot*100));});c.stroke();
+  const n10=Math.max(1,Math.round(N*0.1)),ids=new Set(so.slice(0,n10).map(o=>o.id));
+  cv._hits.push({x0:box.l,x1:xs(10),y0:box.t,y1:box.b,fn:()=>setHighlight('pore',ids,`Largest ${n10} pores (top 10%)`)});
+  $('#nt-conc').textContent=`The largest 10% of pores (${n10}) hold ${at10.toFixed(0)}% of the pore area. Tap the left of the plot to show them.`+(at10>60?' Porosity is dominated by a few large pores.':'');
+}
+function drawGSD(){
+  const cv=$('#pl-gsd');if(!grain){empty(cv,'Separate grains in step 4');return;}
+  const g=grainSummary(),k=kUm();
+  if(k){const fw=g.fw;sizeHist(cv,{id:'gsd',objs:g.so,val:o=>phiOf(o.ecd),weight:()=>1,color:col().grain,binW:0.25,fx:v=>v.toFixed(1),xLabel:'Grain size (φ); coarse left, fine right',yLabel:'% of grains',kind:'grain',unit:'φ',emptyMsg:'No grains',
+      markers:fw?[[fw.p16+(-Math.log2(k/1000)),'16'],[fw.p50+(-Math.log2(k/1000)),'50'],[fw.p84+(-Math.log2(k/1000)),'84']]:null});
+    $('#nt-gsd').textContent=fw?`Graphic mean ${g.Mz.toFixed(2)} φ (${nf(Math.pow(2,-g.Mz)*1000)} µm, ${wentworth(Math.pow(2,-g.Mz))}). Sorting ${fw.sd.toFixed(2)} φ: ${sortClass(fw.sd)}; ${skClass(fw.sk)}.`:'Fewer than 5 grains, so no Folk & Ward statistics.';}
+  else{sizeHist(cv,{id:'gsd',objs:g.so,val:o=>o.ecd,weight:()=>1,color:col().grain,xLabel:'Grain diameter, ECD (px, log scale)',yLabel:'% of grains',kind:'grain',unit:'px',emptyMsg:'No grains'});
+    $('#nt-gsd').textContent=(g.fw?`Sorting ${g.fw.sd.toFixed(2)} φ: ${sortClass(g.fw.sd)}. `:'')+'Set a scale in step 2 to see sizes in φ and micrometres.';}
+}
+function drawRose(){
+  const cv=$('#pl-rose');if(!grain){empty(cv,'Separate grains in step 4');return;}
+  const g=grainSummary(),{c,w,h,C}=prep(cv,260),R=Math.min(w,h)/2-22,cx=w/2,cy=h/2+4;
+  const bins=new Array(18).fill(0),groups=Array.from({length:18},()=>[]);for(const o of g.so){const b=Math.min(17,Math.floor(o.orient/10));bins[b]++;groups[b].push(o.id);}
+  const m=Math.max(...bins)||1;c.strokeStyle=C.line;c.lineWidth=1;
+  for(const f of [.5,1]){c.beginPath();c.arc(cx,cy,R*f,0,Math.PI*2);c.stroke();}
+  for(let a=0;a<180;a+=30){const t=-a*Math.PI/180;c.beginPath();c.moveTo(cx-R*Math.cos(t),cy-R*Math.sin(t));c.lineTo(cx+R*Math.cos(t),cy+R*Math.sin(t));c.stroke();}
+  c.fillStyle=C.muted;c.font='11px "Instrument Sans",system-ui,sans-serif';c.textAlign='center';c.textBaseline='middle';
+  for(const a of [0,45,90,135]){const t=-a*Math.PI/180;c.fillText(a+'°',cx+(R+12)*Math.cos(t),cy+(R+12)*Math.sin(t));}
+  for(let b=0;b<18;b++){const r=R*Math.sqrt(bins[b]/m);if(!r)continue;
+    for(const off of [0,180]){const a0=-(b*10+off)*Math.PI/180,a1=-((b+1)*10+off)*Math.PI/180;c.beginPath();c.moveTo(cx,cy);c.arc(cx,cy,r,a1,a0);c.closePath();c.fillStyle=C.grain;c.globalAlpha=hl&&hl.plot==='rose'&&hl.bin===b?1:.75;c.fill();c.globalAlpha=1;}}
+  if(g.cnt){const t=-g.meanOrient*Math.PI/180;c.strokeStyle=C.ink;c.lineWidth=2;c.beginPath();c.moveTo(cx-R*Math.cos(t),cy-R*Math.sin(t));c.lineTo(cx+R*Math.cos(t),cy+R*Math.sin(t));c.stroke();}
+  cv._hits.push({x0:0,x1:w,y0:0,y1:h,fn:(px,py)=>{const dx=px-cx,dy=py-cy;if(Math.hypot(dx,dy)>R+6)return;let a=-Math.atan2(dy,dx)*180/Math.PI;a=((a%180)+180)%180;const b=Math.min(17,Math.floor(a/10));
+    if(!groups[b].length)return;setHighlight('grain',new Set(groups[b]),`${groups[b].length} grains oriented ${b*10}–${b*10+10}°`);hl.plot='rose';hl.bin=b;drawRose();}});
+  $('#nt-rose').textContent=g.cnt?`Mean long axis ${g.meanOrient.toFixed(0)}° (black line). Fabric strength ${g.R.toFixed(2)}: ${g.R<0.1?'essentially random':g.R<0.3?'weak preferred orientation':g.R<0.6?'moderate preferred orientation':'strong preferred orientation'}. Tap a petal to show those grains.`:'';
+}
+function scatter(cv,id,objs,fx,fy,xlog,ylog,xl,yl,color,kind,h){
+  if(objs.length<2){empty(cv,'Not enough objects');return;}
+  const {c,w,C}=prep(cv,h||260),box={l:50,r:w-14,t:12,b:(h||260)-40,H:h||260};
+  const X=objs.map(fx),Y=objs.map(fy);
+  const rng=(A,lg)=>{let a=Infinity,b=-Infinity;for(const v of A)if(Number.isFinite(v)&&(!lg||v>0)){if(v<a)a=v;if(v>b)b=v;}if(a===b){a=lg?a/2:a-1;b=lg?b*2:b+1;}if(!lg){const p=(b-a)*0.05;a-=p;b+=p;}else{a/=1.15;b*=1.15;}return [a,b];};
+  const [x0,x1]=rng(X,xlog),[y0,y1]=rng(Y,ylog);
+  const xs=xlog?logS(x0,x1,box.l,box.r):linS(x0,x1,box.l,box.r),ys=ylog?logS(y0,y1,box.b,box.t):linS(y0,y1,box.b,box.t);
+  axes(c,C,box,xs,ys,xlog?logT(x0,x1):linT(x0,x1,6),ylog?logT(y0,y1):linT(y0,y1,4),fmtV,fmtV,xl,yl);
+  const pts2=[];c.fillStyle=color;c.globalAlpha=objs.length>800?.35:.6;
+  for(let i=0;i<objs.length;i++){const px=xs(X[i]),py=ys(Y[i]);if(!Number.isFinite(px)||!Number.isFinite(py))continue;const r=objs.length>800?2:3;c.beginPath();c.arc(px,py,r,0,Math.PI*2);c.fill();pts2.push([px,py,objs[i]]);}
+  c.globalAlpha=1;
+  if(sel&&sel.kind===kind){const p=pts2.find(q=>q[2].id===sel.id);if(p){c.strokeStyle=C.ink;c.lineWidth=2;c.beginPath();c.arc(p[0],p[1],7,0,Math.PI*2);c.stroke();}}
+  cv._hits.push({x0:box.l-6,x1:box.r+6,y0:box.t-6,y1:box.b+6,fn:(px,py)=>{let best=null,bd=14*14;for(const p of pts2){const d=(p[0]-px)**2+(p[1]-py)**2;if(d<bd){bd=d;best=p;}}
+    if(best){const o=best[2];const lab=kind==='pore'?pore.lab:grain.lab;let tx=o.cx,ty=o.cy;if(lab[(ty|0)*I.W+(tx|0)]!==o.id){const p=findPixel(lab,o);tx=p[0];ty=p[1];}
+      select(kind,o.id,tx,ty);zoomToObj(o);if(window.innerWidth<980)$('#stage').scrollIntoView({behavior:'smooth',block:'center'});}}});
+  return pts2.length;
+}
+function findPixel(lab,o){for(let y=o.bbox[1];y<=o.bbox[3];y++)for(let x=o.bbox[0];x<=o.bbox[2];x++)if(lab[y*I.W+x]===o.id)return [x+.5,y+.5];return [o.cx,o.cy];}
+function drawShape(){
+  const cv=$('#pl-shape');if(!grain){empty(cv,'Separate grains in step 4');return;}
+  const g=grainSummary();scatter(cv,'shape',g.so,o=>o.ar,o=>o.circ,false,false,'Aspect ratio (long ÷ short axis)','Circularity',col().grain,'grain');
+  $('#nt-shape').textContent=g.cnt?`Mean aspect ratio ${nf(g.ar)}, mean circularity ${nf(g.circ)}, mean solidity ${nf(g.solid)}. Low solidity flags embayed or wrongly merged grains; tap a point to inspect it.`:'';
+}
+const VARS={ecd:['Equivalent diameter','L',true],area:['Area','A',true],major:['Major axis','L',true],minor:['Minor axis','L',true],fmax:['Feret max','L',true],perim:['Perimeter','L',true],
+  ar:['Aspect ratio','',false],circ:['Circularity','',false],solid:['Solidity','',false],orient:['Orientation (°)','',false],phi:['Size (φ)','',false]};
+function varVal(k){return k==='ecd'||k==='major'||k==='minor'||k==='fmax'||k==='perim'?o=>Lv(o[k]):k==='area'?o=>Av(o.area):k==='phi'?o=>phiOf(o.ecd):o=>o[k];}
+function varLabel(k){const v=VARS[k];return v[0]+(v[1]==='L'?` (${uL()})`:v[1]==='A'?` (${uA()})`:'')+(v[2]?', log':'');}
+function fillXpSelects(){const opts=Object.keys(VARS).filter(k=>k!=='phi'||kUm()).map(k=>`<option value="${k}">${VARS[k][0]}</option>`).join('');
+  for(const id of ['xpX','xpY']){const key=id==='xpX'?'x':'y',s=$('#'+id),v=xp[key];s.innerHTML=opts;s.value=v in VARS&&(v!=='phi'||kUm())?v:'ecd';xp[key]=s.value;}$('#xpSet').value=xp.set;}
+function drawXP(){
+  const cv=$('#pl-xp'),isG=xp.set==='grain';if(isG&&!grain){empty(cv,'Separate grains in step 4, or switch to pores');return;}
+  const objs=isG?grainSummary().so:poreSummary().so;
+  const n=scatter(cv,'xp',objs,varVal(xp.x),varVal(xp.y),VARS[xp.x][2],VARS[xp.y][2],varLabel(xp.x),varLabel(xp.y),isG?col().grain:col().pore,isG?'grain':'pore',300);
+  if(n){const X=objs.map(varVal(xp.x)),Y=objs.map(varVal(xp.y)),lx=VARS[xp.x][2],ly=VARS[xp.y][2];
+    const a=X.map(v=>lx?Math.log(v):v),b=Y.map(v=>ly?Math.log(v):v),ma=a.reduce((s,v)=>s+v,0)/a.length,mb=b.reduce((s,v)=>s+v,0)/b.length;
+    let sab=0,saa=0,sbb=0;for(let i=0;i<a.length;i++){sab+=(a[i]-ma)*(b[i]-mb);saa+=(a[i]-ma)**2;sbb+=(b[i]-mb)**2;}const r=sab/Math.sqrt(saa*sbb||1);
+    $('#nt-xp').textContent=`${objs.length} ${isG?'grains':'pores'}. Correlation r = ${r.toFixed(2)}${Math.abs(r)<0.2?' (little relationship)':Math.abs(r)<0.5?' (weak)':Math.abs(r)<0.75?' (moderate)':' (strong)'}${lx||ly?' on the log scales shown':''}. Tap a point to find it on the image.`;}
+}
+
+function drawArea(){
+  const cv=$('#pl-area'),isG=$('#arSet').value==='grain';if(isG&&!grain){empty(cv,'Separate grains in step 4, or switch to pores');return;}
+  const objs=isG?grainSummary().so:poreSummary().so;if(objs.length<2){empty(cv,'Not enough objects');return;}
+  const B=parseInt($('#arBins').value,10)||30,vals=objs.map(o=>Av(o.area)),lo=Math.min(...vals),hi=Math.max(...vals),wB=(hi-lo)/B||1;
+  const groups=Array.from({length:B},()=>[]);vals.forEach((v,i)=>{let k=Math.floor((v-lo)/wB);if(k>=B)k=B-1;groups[k].push(objs[i]);});
+  const {c,w,h,C}=prep(cv,250),box={l:50,r:w-14,t:12,b:h-40,H:h},ymax=niceNum(Math.max(...groups.map(g=>g.length))*1.08)||1;
+  const xs=linS(lo,lo+wB*B,box.l,box.r),ys=linS(0,ymax,box.b,box.t);
+  axes(c,C,box,xs,ys,linT(lo,lo+wB*B,6),linT(0,ymax,4),fmtV,v=>String(Math.round(v)),`Area (${uA()})`,'Frequency');
+  const colr=isG?C.grain:C.pore;
+  groups.forEach((g,k)=>{if(!g.length)return;const x0=xs(lo+k*wB)+0.5,x1=xs(lo+(k+1)*wB)-0.5,y=ys(g.length);c.fillStyle=colr;c.globalAlpha=hl&&hl.plot==='area'&&hl.bin===k?1:.8;c.fillRect(x0,y,Math.max(1,x1-x0),box.b-y);c.globalAlpha=1;
+    c.strokeStyle=C.ink;c.lineWidth=0.6;c.strokeRect(x0,y,Math.max(1,x1-x0),box.b-y);
+    cv._hits.push({x0,x1,y0:box.t,y1:box.b,fn:()=>{setHighlight(isG?'grain':'pore',new Set(g.map(o=>o.id)),`${g.length} ${isG?'grains':'pores'}, area ${fmtV(lo+k*wB)}–${fmtV(lo+(k+1)*wB)} ${uA()}`);hl.plot='area';hl.bin=k;drawArea();}});});
+  const sorted=vals.slice().sort((a,b)=>a-b);
+  $('#nt-area').textContent=`${objs.length} ${isG?'grains':'pores'}: median area ${nf(percentile(sorted,.5))} ${uA()}, mean ${nf(vals.reduce((a,b)=>a+b,0)/vals.length)} ${uA()}, largest ${nf(sorted[sorted.length-1])} ${uA()}. Equal‑width bins, as in a standard area histogram; tap a bar to show those objects.`;
+}
+function drawGroups(){
+  const cv=$('#pl-groups');if(!I.clusters){empty(cv,'No colour groups yet. Choose Colour groups in step 3.');return;}
+  const cl=I.clusters,K=cl.length,rowH=22,{c,w,h,C}=prep(cv,K*rowH+26),lbl=96,maxS=Math.max(...cl.map(x=>x.share))||1,NM={pore:'pore',grain:'grain',matrix:'matrix'};
+  c.font='12px "Instrument Sans",system-ui,sans-serif';c.textBaseline='middle';
+  cl.forEach((g,k)=>{const y=8+k*rowH,bw=(w-lbl-70)*g.share/maxS;
+    c.fillStyle=`rgb(${g.rgb.join(',')})`;c.fillRect(6,y+3,14,14);c.fillStyle=g.pal;c.fillRect(16,y+11,8,8);
+    c.fillStyle=C.ink;c.textAlign='left';c.fillText(`${k+1}. ${NM[I.clCls[k]]}`,30,y+10);
+    c.fillStyle=I.clCls[k]==='pore'?C.pore:I.clCls[k]==='matrix'?(getComputedStyle(document.documentElement).getPropertyValue('--matrix').trim()):C.grain;
+    c.fillRect(lbl,y+4,Math.max(1,bw),12);c.fillStyle=C.muted;c.fillText(`${(g.share*100).toFixed(1)}%`,lbl+bw+6,y+10);
+    cv._hits.push({x0:0,x1:w,y0:y,y1:y+rowH,fn:()=>showCluster(k)});});
+  const by={pore:0,grain:0,matrix:0};cl.forEach((g,k)=>by[I.clCls[k]]+=g.share);
+  $('#nt-groups').textContent=`${K} groups (${P.clSpace==='rgb'?'RGB':'perceptual colour'}). Merged by role: pore ${(by.pore*100).toFixed(1)}%, grain ${(by.grain*100).toFixed(1)}%, matrix / cement ${(by.matrix*100).toFixed(1)}%.`+(P.mode!=='clusters'?' Pores are currently detected by another method, so these shares may differ from the porosity.':'');
+}
+const PLOTS={area:drawArea,groups:drawGroups,comp:drawComp,psd:drawPSD,conc:drawConc,gsd:drawGSD,rose:drawRose,shape:drawShape,xp:drawXP};
+function drawPlot(id){if(dashVisible()&&PLOTS[id])PLOTS[id]();}
+function renderDashboard(){fillXpSelects();for(const id in PLOTS)PLOTS[id]();renderTables();}
+$$('canvas.plot').forEach(cv=>cv.addEventListener('click',e=>{const r=cv.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;
+  for(const h of (cv._hits||[])){if(x>=h.x0&&x<=h.x1&&y>=h.y0&&y<=h.y1){h.fn(x,y);break;}}}));
+$('#arSet').onchange=()=>drawArea();$('#arBins').onchange=()=>drawArea();
+$('#xpSet').onchange=e=>{xp.set=e.target.value;if(xp.set==='pore'&&xp.y==='ar'){xp.y='circ';fillXpSelects();}drawXP();};
+$('#xpX').onchange=e=>{xp.x=e.target.value;drawXP();};$('#xpY').onchange=e=>{xp.y=e.target.value;drawXP();};
+let dashRO=0;new ResizeObserver(()=>{clearTimeout(dashRO);dashRO=setTimeout(()=>{if(dashVisible())for(const id in PLOTS)PLOTS[id]();},120);}).observe($('#dash'));
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{if(dashVisible())renderDashboard();});
+$$('[data-save]').forEach(b=>b.onclick=()=>{const cv=$('#pl-'+b.dataset.save);cv.toBlob(bl=>{if(bl)save(`${baseName()}_${b.dataset.save}.png`,bl);},'image/png');});
+
+/* =============== tables =============== */
+const COLS=[['id','#',o=>o.id,''],['cx','Centroid x',o=>o.cx/I.scaleF,'px'],['cy','Centroid y',o=>o.cy/I.scaleF,'px'],['area','Area',o=>Av(o.area),'A'],['ecd','ECD',o=>Lv(o.ecd),'L'],['major','Major',o=>Lv(o.major),'L'],['minor','Minor',o=>Lv(o.minor),'L'],
+  ['ar','Aspect',o=>o.ar,''],['orient','Orient.',o=>o.orient,'°'],['circ','Circ.',o=>o.circ,''],['solid','Solidity',o=>o.solid,''],['fmax','Feret max',o=>Lv(o.fmax),'L'],['fmin','Feret min',o=>Lv(o.fmin),'L']];
+function renderTable(el,objs,sort,kind,exSet){
+  const unit=u=>u==='L'?uL():u==='A'?uA():u,colm=COLS.find(c=>c[0]===sort.key)||COLS[1],rows=objs.slice().sort((a,b)=>(colm[2](a)-colm[2](b))*sort.dir).slice(0,300);
+  el.innerHTML=`<thead><tr>${COLS.map(c=>`<th data-k="${c[0]}"${c[0]===sort.key?` aria-sort="${sort.dir>0?'ascending':'descending'}"`:''}>${c[1]}<small>${unit(c[3])||'&nbsp;'}</small></th>`).join('')}</tr></thead>
+  <tbody>${rows.map(o=>`<tr data-id="${o.id}" class="${exSet&&exSet.has(o.id)?'ex':''}${sel&&sel.kind===kind&&sel.id===o.id?' sel':''}">${COLS.map(c=>`<td>${c[0]==='id'?o.id+(o.edge?'ᵉ':''):c[0]==='orient'?o.orient.toFixed(0):nf(c[2](o))}</td>`).join('')}</tr>`).join('')}</tbody>`+
+  (objs.length>300?`<caption style="caption-side:bottom;font-size:12px;color:var(--muted);padding:6px">Showing 300 of ${objs.length}. The CSV has all of them. ᵉ marks objects cut by the analysis edge.</caption>`:'');}
+function renderTables(){renderTable($('#poreTable'),pore.objs,poreSort,'pore');if(grain)renderTable($('#grainTable'),grain.objs,grainSort,'grain',grain.excluded);else $('#grainTable').innerHTML='<tbody><tr><td style="text-align:left">Separate grains in step 4.</td></tr></tbody>';}
+function highlightRows(){$$('#poreTable tbody tr, #grainTable tbody tr').forEach(tr=>tr.classList.remove('sel'));if(!sel)return;const tr=document.querySelector(`${sel.kind==='pore'?'#poreTable':'#grainTable'} tbody tr[data-id="${sel.id}"]`);if(tr)tr.classList.add('sel');}
+function tableClick(e,kind){const th=e.target.closest('th'),s=kind==='pore'?poreSort:grainSort;
+  if(th){const k=th.dataset.k;if(s.key===k)s.dir*=-1;else{s.key=k;s.dir=k==='id'?1:-1;}renderTables();return;}
+  const tr=e.target.closest('tr[data-id]');if(!tr)return;const id=+tr.dataset.id,o=kind==='pore'?pore.byId.get(id):grain.byId.get(id);if(!o)return;
+  const p=findPixel(kind==='pore'?pore.lab:grain.lab,o);select(kind,id,p[0],p[1]);zoomToObj(o);$('#stage').scrollIntoView({behavior:'smooth',block:'center'});}
+$('#poreTable').addEventListener('click',e=>tableClick(e,'pore'));$('#grainTable').addEventListener('click',e=>tableClick(e,'grain'));
+
+/* =============== export =============== */
+function csvFor(kind){const k=kUm(),lu=k?'um':'px',au=k?'um2':'px2',isG=kind==='grain',objs=isG?grain.objs:pore.objs;
+  const head=['id','centroid_x_px','centroid_y_px','bbox_x0_px','bbox_y0_px','bbox_x1_px','bbox_y1_px',`area_${au}`,`ecd_${lu}`,`perimeter_${lu}`,`major_${lu}`,`minor_${lu}`,'aspect_ratio','orientation_deg','circularity','solidity',`feret_max_${lu}`,`feret_min_${lu}`,'cut_by_edge'];
+  if(isG){head.push('excluded');if(k)head.push('phi');}const lines=[head.join(',')];
+  const ox=I.crop?I.crop.x:0,oy=I.crop?I.crop.y:0;for(const o of objs){const r=[o.id,(ox+o.cx/I.scaleF).toFixed(1),(oy+o.cy/I.scaleF).toFixed(1),(ox+o.bbox[0]/I.scaleF).toFixed(0),(oy+o.bbox[1]/I.scaleF).toFixed(0),(ox+(o.bbox[2]+1)/I.scaleF).toFixed(0),(oy+(o.bbox[3]+1)/I.scaleF).toFixed(0),Av(o.area).toFixed(2),Lv(o.ecd).toFixed(3),Lv(o.perim).toFixed(3),Lv(o.major).toFixed(3),Lv(o.minor).toFixed(3),o.ar.toFixed(4),o.orient.toFixed(1),o.circ.toFixed(4),o.solid.toFixed(4),Lv(o.fmax).toFixed(3),Lv(o.fmin).toFixed(3),o.edge?1:0];
+    if(isG){r.push(grain.excluded.has(o.id)?1:0);if(k)r.push(phiOf(o.ecd).toFixed(3));}lines.push(r.join(','));}
+  return lines.join('\n');}
+async function copyText(t,ok){try{await navigator.clipboard.writeText(t);toast(ok);}catch(e){const ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();try{document.execCommand('copy');toast(ok);}catch(_){toast('Copying isn’t available here');}ta.remove();}}
+const baseName=()=>(I&&I.name||'thin-section').replace(/\.[^.]+$/,'').replace(/[^\w-]+/g,'_');
+async function save(filename,data){if(!downloads){
+    // standalone page: ordinary browser download
+    try{const blob=data instanceof Blob?data:new Blob([data],{type:filename.endsWith('.csv')?'text/csv':'text/plain'}),url=URL.createObjectURL(blob),a=document.createElement('a');
+      a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),4000);toast('Saved '+filename);}
+    catch(e){if(typeof data==='string')copyText(data,'Saving isn’t available here, so the data was copied instead');else toast('Saving files isn’t available here');}
+    return;}
+  try{await downloads.save({filename,data});}catch(e){if(e&&e.code==='declined')return;toast(e&&e.code==='rate_limited'?'A save is already waiting for your answer':'The file couldn’t be saved');}}
+const poreCsv=()=>{if(I)save(baseName()+'_pores.csv',csvFor('pore'));},grainCsv=()=>{if(grain)save(baseName()+'_grains.csv',csvFor('grain'));else toast('Separate grains in step 4 first');};
+$('#poreCsv').onclick=poreCsv;$('#poreCsv2').onclick=poreCsv;$('#grainCsv').onclick=grainCsv;$('#grainCsv2').onclick=grainCsv;
+$('#exportPng').onclick=()=>{if(!I)return;const c=document.createElement('canvas');c.width=I.W;c.height=I.H;drawScene(c.getContext('2d'),1,0,0,1,I.W,I.H,true);c.toBlob(b=>{if(b)save(baseName()+'_annotated.png',b);},'image/png');};
+$('#copyBtn').onclick=()=>{if(!I)return;const s=poreSummary(),u=uL(),out=[`Image: ${I.name}`,`Scale: ${umPerOrig?umPerOrig+' µm/px':'not set'}`,`Analysis area: ${Math.round(I.roiN/I.n*100)}% of image`,
+  `${PH().name}: ${s.phi.toFixed(2)}%`,`Pores: ${s.count} (${s.cnt} in statistics); mean ECD ${nf(Lv(s.meanEcd))} ${u}; area-weighted D50 ${nf(Lv(s.d50))} ${u}; mean circularity ${nf(s.circ)}`];
+  if(grain){const g=grainSummary();out.push(`Grains: ${g.cnt} in statistics; mean ECD ${nf(Lv(g.meanEcd))} ${u}; mean aspect ratio ${nf(g.ar)}`);
+    if(g.fw){if(kUm())out.push(`Folk & Ward mean ${g.Mz.toFixed(2)} phi (${wentworth(Math.pow(2,-g.Mz))})`);out.push(`Sorting ${g.fw.sd.toFixed(2)} phi (${sortClass(g.fw.sd)}); skewness ${g.fw.sk.toFixed(2)}`);}
+    out.push(`Fabric: mean long axis ${g.meanOrient.toFixed(0)} deg, strength ${g.R.toFixed(2)}`);}
+  if(pts.some(p=>p.ov!==null)||tool==='points'){const r=pcStats();out.push(`Point count: ${(r.p*100).toFixed(1)}% ± ${(r.ci*100).toFixed(1)} (95%, n=${r.n})`);}
+  copyText(out.join('\n'),'Summary copied');};
+
+/* =============== controls =============== */
+function syncUI(){
+  const set=(id,v,txt)=>{$('#'+id).value=v;$('#'+id+'o').textContent=txt;};
+  set('hueC',P.hueC,P.hueC+'°');set('hueW',P.hueW,'±'+Math.round(P.hueW/2)+'°');set('satMin',P.satMin,Math.round(P.satMin*100)+'%');set('valMin',P.valMin,Math.round(P.valMin*100)+'%');
+  set('grayMax',P.grayMax,P.grayMax);set('minSize',P.minSize,P.minSize+' px');set('fillHoles',P.fillHoles,P.fillHoles?P.fillHoles+' px':'off');set('fillTol',P.fillTol,P.fillTol);
+  set('bias',P.bias,P.bias>0?'+'+P.bias:String(P.bias));set('tol',P.tol,P.tol);
+  const hw=$('#hueWin'),l=((P.hueC-P.hueW/2)%360+360)%360;hw.style.left=(l/360*100)+'%';hw.style.width=Math.min(P.hueW/360*100,100-l/360*100)+'%';
+  $('#mSamples').hidden=P.mode!=='samples';$('#mHsv').hidden=P.mode!=='hsv';$('#mGray').hidden=P.mode!=='gray';
+  $$('[data-mode]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.mode===P.mode));
+  $('#smooth').checked=P.smooth;$('#fillIntra').checked=P.fillIntra;$('#denoise').checked=P.denoise;$('#flatten').checked=P.flatten;$$('[data-gm]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.gm===P.gMethod));$('#openBox').hidden=P.gMethod!=='opening';$('#openR').value=P.openR;$('#openRo').textContent=P.openR+' px'+(umPerOrig?` (${nf(P.openR*umPerOrig)} µm)`:'');if(I){const rw=P.openR*I.scaleF;$('#openRw').textContent=I.scaleF<0.999?`At the current detail this is ${rw.toFixed(2)} analysis pixels.`+(rw<1?' That’s too small to cut anything: raise the detail in step 1 or analyse an area at full resolution.':''):'The image is analysed at full resolution, so radii match the notebook exactly.';}$('#openConn').value=String(P.openConn);$('#openBorder').checked=P.openBorder;$('#openMin').value=P.openMin;$('#openRestore').checked=P.openRestore;$('#K').value=P.K;$$('[data-cld]').forEach(b=>b.setAttribute('aria-pressed',(b.dataset.cld==='1')===P.clDirect));$('#cldNote').textContent=P.clDirect?'Every pixel takes the role of its K‑means group, and groups with the same role are merged. With many groups, mark every pore‑coloured group as pore.':'Each group supplies a few example pixels; every pixel then takes the role of the most similar example. Smoother, and usually better with few groups.';$('#Ko').textContent=P.K;$('#clSpace').value=P.clSpace;$('#kInit').value=P.kInit;$('#phase').value=P.phase;$$('[data-ginv]').forEach(b=>b.setAttribute('aria-pressed',(b.dataset.ginv==='1')===P.grayInv));$('#grayLbl').textContent=P.grayInv?'Pores lighter than':'Pores darker than';$('#edgeEx').checked=P.edgeEx;
+}
+const bindR=(id,key,int,after)=>$('#'+id).addEventListener('input',e=>{P[key]=int?parseInt(e.target.value,10):parseFloat(e.target.value);syncUI();(after||scheduleDetect)();});
+bindR('hueC','hueC',1);bindR('hueW','hueW',1);bindR('satMin','satMin');bindR('valMin','valMin');bindR('grayMax','grayMax',1);bindR('minSize','minSize',1);bindR('fillHoles','fillHoles',1);
+bindR('bias','bias',1);bindR('tol','tol',1);bindR('fillTol','fillTol',1,()=>{});
+const gr=()=>{renderGrainStatus();scheduleSegment();};
+bindR('grainR','grainR',1,()=>{P.grainRUser=true;gr();});bindR('neck','neck',1,gr);bindR('edgeW','edgeW',1,gr);bindR('darkCut','darkCut',1,gr);
+$('#smooth').onchange=e=>{P.smooth=e.target.checked;scheduleDetect();};
+$('#denoise').onchange=e=>{P.denoise=e.target.checked;if(I){refreshSampleLabs();if(P.mode==='clusters'){busy(true);setTimeout(()=>{autoSuggest(true);runDetect();},20);return;}}scheduleDetect();};
+$('#fillIntra').onchange=e=>{P.fillIntra=e.target.checked;if(step==='grains')scheduleSegment();else if(grain)grain.stale=true;};
+let kT=0;$('#K').addEventListener('input',e=>{P.K=parseInt(e.target.value,10);$('#Ko').textContent=P.K;if(!I)return;busy(true,'Grouping colours…');clearTimeout(kT);kT=setTimeout(()=>{autoSuggest(true);if(I.clCls.every(c=>c!=='pore')){I.clCls=null;autoSuggest(false);}syncUI();runDetect();},300);});
+$$('[data-cld]').forEach(b=>b.onclick=()=>{P.clDirect=b.dataset.cld==='1';if(!I){syncUI();return;}busy(true);setTimeout(()=>{if(P.clDirect){P.mode='clusters';}else applyClusters(false);syncUI();runDetect();},20);});
+$('#kInit').onchange=e=>{P.kInit=e.target.value;if(!I)return;busy(true,'Grouping colours…');setTimeout(()=>{autoSuggest(true);syncUI();runDetect();},20);};
+$('#clSpace').onchange=e=>{P.clSpace=e.target.value;if(!I)return;busy(true,'Grouping colours…');setTimeout(()=>{autoSuggest(true);syncUI();runDetect();},20);};
+$('#mapBtn').onclick=()=>{L.clmap=!L.clmap;$('#mapBtn').setAttribute('aria-pressed',L.clmap);$('#mapBtn').textContent=L.clmap?'Hide group map':'Show group map';requestDraw();};
+$$('[data-gm]').forEach(b=>b.onclick=()=>{P.gMethod=b.dataset.gm;syncUI();if(I&&pore){busy(true,'Separating grains…');setTimeout(segmentGrains,30);}});
+let oT=0;$('#openR').addEventListener('input',e=>{P.openR=parseFloat(e.target.value);syncUI();$$('.rad').forEach(b=>b.classList.toggle('on',+b.dataset.rad===P.openR));if(!I)return;busy(true,'Separating grains…');clearTimeout(oT);oT=setTimeout(segmentGrains,300);});
+$('#openConn').onchange=e=>{P.openConn=+e.target.value;if(I){busy(true,'Separating grains…');setTimeout(segmentGrains,30);}};
+$('#openBorder').onchange=e=>{P.openBorder=e.target.checked;if(I){busy(true,'Separating grains…');setTimeout(segmentGrains,30);}};
+$('#openMin').onchange=e=>{P.openMin=Math.max(0,+e.target.value||0);if(I){busy(true,'Separating grains…');setTimeout(segmentGrains,30);}};
+$('#openRestore').onchange=e=>{P.openRestore=e.target.checked;if(I){busy(true,'Separating grains…');setTimeout(segmentGrains,30);}};
+$('#radiiBtn').onclick=()=>{if(!I)return;busy(true,'Trying radii…');setTimeout(compareRadii,30);};
+$('#radiiOut').addEventListener('click',e=>{const b=e.target.closest('[data-rad]');if(!b)return;P.openR=+b.dataset.rad;syncUI();$$('.rad').forEach(x=>x.classList.toggle('on',x===b));busy(true,'Separating grains…');setTimeout(segmentGrains,30);});
+$('#phase').onchange=e=>{P.phase=e.target.value;refreshAll();};
+$('#flatten').onchange=e=>{P.flatten=e.target.checked;if(I){busy(true);setTimeout(()=>{refreshSampleLabs();if(P.mode==='clusters')autoSuggest(true);runDetect();},20);}};
+$$('[data-ginv]').forEach(b=>b.onclick=()=>{P.grayInv=b.dataset.ginv==='1';syncUI();scheduleDetect();});
+$('#autoBtn').onclick=()=>{if(!I)return;busy(true,'Looking at the image…');setTimeout(()=>{I.clCls=null;autoSuggest(false);syncUI();setTool('select');runDetect();},20);};
+$('#clusterBox').addEventListener('click',e=>{if(!I)return;const sh=e.target.closest('[data-show]');if(sh){showCluster(+sh.dataset.show);return;}const b=e.target.closest('[data-cl]');if(!b)return;const k=+b.dataset.cl,nx={pore:'grain',grain:'matrix',matrix:'pore'};I.clCls[k]=nx[I.clCls[k]];renderClusters();busy(true);setTimeout(()=>{if(P.clDirect){P.mode='clusters';syncUI();runDetect();}else applyClusters(true);},20);});
+$('#swapBtn').onclick=()=>{if(!I)return;if(P.mode==='clusters'&&I.clCls){I.clCls=I.clCls.map(c=>c==='pore'?'grain':c==='grain'?'pore':c);renderClusters();runDetect();toast('Pore and grain swapped');return;}if(P.mode==='samples'){const t=samples.pore;samples.pore=samples.solid;samples.solid=t;if(I.clCls){I.clCls=I.clCls.map(c=>c==='pore'?'grain':c==='grain'?'pore':c);renderClusters();}}else if(P.mode==='gray'){P.grayInv=!P.grayInv;syncUI();}else{toast('Swap works with Tap examples or Brightness');return;}runDetect();toast('Pore and grain swapped');};
+$('#res').onchange=e=>{MAXD=parseInt(e.target.value,10);if(!I)return;if(I.file&&!I.crop){loadFile(I.file,true);return;}if(I.file&&I.crop){toast('New detail level applies when you next load an area or the whole image');return;}const keep=umPerOrig,src=I.src,w=I.origW,h=I.origH,nm=I.name;busy(true,'Reloading…');
+  setTimeout(()=>{setImage(src,w,h,nm);umPerOrig=keep;syncScaleFields();autoSuggest();syncUI();runDetect();goStep(step==='results'?'pores':step);toast('Image reloaded at the new detail level. Pore examples were re‑suggested.');},20);};
+$('#edgeEx').onchange=e=>{P.edgeEx=e.target.checked;refreshAll();};
+$$('[data-mode]').forEach(b=>b.onclick=()=>{P.mode=b.dataset.mode;if(P.mode==='clusters'){P.clDirect=true;if(I&&!I.clusters)autoSuggest(true);}else if(P.mode==='samples')P.clDirect=false;syncUI();setTool(stepTools().includes(tool)?tool:'select');if(P.mode==='samples'&&!samples.pore.length)setTool('poreSample');if(P.mode==='hsv')setTool('pick');scheduleDetect();});
+$('#otsuBtn').onclick=()=>{if(!I)return;P.grayMax=otsu();syncUI();runDetect();toast(`Threshold set to ${P.grayMax}`);};
+$('#clearSamples').onclick=()=>{samples.pore=[];samples.solid=[];samples.matrix=[];if(I&&I.clCls)I.clCls=I.clCls.map(()=>'grain');renderClusters();setTool('poreSample');runDetect();};
+$('#undoEdit').onclick=()=>{const op=ops.pop();if(!op){toast('Nothing to undo');return;}if(op.t==='add'){for(const i of op.idx)I.add[i]--;}else if(op.t==='excl')excl.pop();else if(op.t==='unexcl')excl.push(op.e);runDetect();};
+$('#clearEdits').onclick=()=>{if(!I)return;ops=[];excl=[];I.add.fill(0);runDetect();toast('Hand fixes cleared');};
+$('#grainUndo').onclick=()=>{if(grain)undoGrain();};
+$('#rerunBtn').onclick=()=>{busy(true,'Separating grains…');setTimeout(segmentGrains,30);};
+$('#lyPores').onchange=e=>{L.pores=e.target.checked;requestDraw();};$('#lyGrains').onchange=e=>{L.grains=e.target.checked;requestDraw();};
+$('#lyFill').onchange=e=>{L.fill=e.target.checked;if(grain){buildGrainCanvas();requestDraw();}};
+$('#opacity').oninput=e=>{L.opacity=parseFloat(e.target.value);requestDraw();};
+$('#selClose').onclick=clearSel;
+$('#nPts').onchange=e=>{nPts=parseInt(e.target.value,10);buildPoints();updatePC();requestDraw();};
+function syncScaleFields(except){
+  if(!I)return;const u=parseFloat($('#dimU').value);
+  if(except!=='scale')$('#scale').value=umPerOrig?+umPerOrig.toPrecision(6):'';
+  if(except!=='dimW')$('#dimW').value=umPerOrig?+(I.origW*umPerOrig/u).toPrecision(5):'';
+  if(except!=='dimH')$('#dimH').value=umPerOrig?+(I.origH*umPerOrig/u).toPrecision(5):'';
+}
+function setScale(v,except){umPerOrig=v>0?v:0;syncScaleFields(except);refreshAll();}
+$('#scale').addEventListener('input',e=>{setScale(parseFloat(e.target.value)||0,'scale');});
+$('#dimW').addEventListener('input',e=>{if(!I)return;const v=parseFloat(e.target.value)*parseFloat($('#dimU').value);setScale(v>0?v/I.origW:0,'dimW');});
+$('#dimH').addEventListener('input',e=>{if(!I)return;const v=parseFloat(e.target.value)*parseFloat($('#dimU').value);setScale(v>0?v/I.origH:0,'dimH');});
+$('#dimU').onchange=()=>syncScaleFields();
+$('#scaleClear').onclick=()=>{setScale(0);toast('Scale cleared; results are in pixels');};
+$('#calibSet').onclick=()=>{const um=parseFloat($('#calibUm').value);if(!calibLine||!(um>0)){toast('Enter the scale bar length in µm');return;}
+  const px=Math.hypot(calibLine.b.x-calibLine.a.x,calibLine.b.y-calibLine.a.y)/I.scaleF;setScale(um/px);calibLine=null;$('#calibBox').hidden=true;$('#calibUm').value='';setTool('select');
+  toast(`Scale set: ${(um/px).toPrecision(4)} µm per pixel`);};
+
+/* =============== loading =============== */
+async function readDims(file){
+  try{const buf=new Uint8Array(await file.slice(0,262144).arrayBuffer());
+    if(buf[0]===0x89&&buf[1]===0x50){const v=new DataView(buf.buffer);return [v.getUint32(16),v.getUint32(20)];}
+    if(buf[0]===0xFF&&buf[1]===0xD8){let i=2;while(i<buf.length-9){if(buf[i]!==0xFF){i++;continue;}const m=buf[i+1],len=(buf[i+2]<<8)|buf[i+3];
+      if(m>=0xC0&&m<=0xCF&&m!==0xC4&&m!==0xC8&&m!==0xCC)return [(buf[i+7]<<8)|buf[i+8],(buf[i+5]<<8)|buf[i+6]];i+=2+len;}}}catch(e){}
+  return null;}
+async function decodeFile(file,crop){
+  // decode straight to the analysis size so very large images (rock slabs, mosaics) never need a full-size canvas
+  let dims=await readDims(file),bmp=null;
+  const sw=crop?crop.w:(dims?dims[0]:0),sh=crop?crop.h:(dims?dims[1]:0);
+  if(sw&&sh&&typeof createImageBitmap==='function'){const f=fitDims(sw,sh),tw=Math.max(1,Math.round(sw*f)),th=Math.max(1,Math.round(sh*f));
+    try{bmp=crop?await createImageBitmap(file,crop.x,crop.y,crop.w,crop.h,{resizeWidth:tw,resizeHeight:th,resizeQuality:'high'}):await createImageBitmap(file,{resizeWidth:tw,resizeHeight:th,resizeQuality:'high'});
+      // EXIF rotation can swap width and height
+      if(!crop&&Math.abs(bmp.width/bmp.height-sw/sh)>0.02&&Math.abs(bmp.width/bmp.height-sh/sw)<0.02){bmp.close&&bmp.close();bmp=await createImageBitmap(file,{resizeWidth:Math.round(sh*f),resizeHeight:Math.round(sw*f),resizeQuality:'high'});return {bmp,w:sh,h:sw};}
+      return {bmp,w:sw,h:sh};}catch(e){bmp=null;}}
+  if(crop)throw new Error('crop');
+  bmp=await createImageBitmap(file);return {bmp,w:bmp.width,h:bmp.height};
+}
+async function loadFile(file,keepSettings){if(!file)return;busy(true,'Loading image…');
+  const go=(src,w,h,opt)=>{const keep=umPerOrig;setImage(src,w,h,file.name,Object.assign({file},opt||{}));if(keepSettings)umPerOrig=keep;autoSuggest(keepSettings&&I.clCls?true:false);syncUI();syncScaleFields();runDetect();goStep(keepSettings&&step!=='image'?step:'image');toast(keepSettings?'Reloaded at the new detail level.':'Image loaded. Fix anything listed, or choose Next.');};
+  try{const r=await decodeFile(file);setTimeout(()=>go(r.bmp,r.w,r.h,r.bmp.width!==r.w?{workW:r.bmp.width,workH:r.bmp.height}:{}),10);}
+  catch(err){const rd=new FileReader();rd.onload=()=>{const im=new Image();im.onload=()=>go(im,im.naturalWidth,im.naturalHeight);
+    im.onerror=()=>{busy(false);toast('This image couldn’t be opened. Save it as JPG, PNG or WebP; most browsers can’t read TIFF. Very large images may need to be cropped first.');};im.src=rd.result;};rd.onerror=()=>{busy(false);toast('The file couldn’t be read.');};rd.readAsDataURL(file);}}
+async function analyseAreaFull(){
+  if(!I||!I.file){toast('Load the image from a file first');return;}
+  const whole=roi.x0===0&&roi.y0===0&&roi.x1===I.W&&roi.y1===I.H;
+  if(whole){toast('First draw the area to analyse with “Draw analysis area”, then tap this again');setTool('roi');return;}
+  const off=I.crop||{x:0,y:0},crop={x:Math.round(off.x+roi.x0/I.scaleF),y:Math.round(off.y+roi.y0/I.scaleF),w:Math.round((roi.x1-roi.x0)/I.scaleF),h:Math.round((roi.y1-roi.y0)/I.scaleF)};
+  const file=I.file,keep=umPerOrig,parent={name:I.name.replace(/ \(area\)$/,''),file};busy(true,'Loading the area at full detail…');
+  try{const r=await decodeFile(file,crop);
+    setTimeout(()=>{setImage(r.bmp,crop.w,crop.h,parent.name+' (area)',{file,crop:{x:crop.x,y:crop.y},workW:r.bmp.width,workH:r.bmp.height});umPerOrig=keep;autoSuggest(false);syncUI();syncScaleFields();runDetect();goStep('image');
+      toast(I.scaleF>0.999?'Area loaded at full resolution. Radii and sizes now match the original pixels.':`Area loaded at ${Math.round(I.scaleF*100)}% of full resolution (largest this device can handle).`);},10);}
+  catch(e){busy(false);toast('This browser can’t decode part of an image. Crop the image on your computer instead.');}
+}
+$('#file').addEventListener('change',e=>{loadFile(e.target.files[0]);e.target.value='';});
+['dragenter','dragover'].forEach(t=>stage.addEventListener(t,e=>{e.preventDefault();stage.classList.add('drag');}));
+['dragleave','drop'].forEach(t=>stage.addEventListener(t,e=>{e.preventDefault();stage.classList.remove('drag');}));
+stage.addEventListener('drop',e=>{loadFile(e.dataTransfer.files&&e.dataTransfer.files[0]);});
+
+function makeSample(){
+  busy(true,'Building sample…');
+  setTimeout(()=>{
+    const W=1500,H0=1050,H=H0+70,c=document.createElement('canvas');c.width=W;c.height=H;const g=c.getContext('2d');
+    let seed=987654;const rnd=()=>{seed=(seed*16807)%2147483647;return (seed-1)/2147483646;};
+    g.fillStyle='rgb(40,104,198)';g.fillRect(0,0,W,H0);
+    const grains=[],place=(a,b,fac,tries,max)=>{for(let k=0;k<tries&&grains.length<max;k++){const r=a+rnd()*(b-a),x=rnd()*W,y=rnd()*H0;let ok=true;for(const q of grains){if(Math.hypot(q.x-x,q.y-y)<(q.r+r)*fac){ok=false;break;}}if(ok)grains.push({x,y,r});}};
+    place(28,62,0.8,12000,300);place(10,22,0.85,12000,700);
+    const fabric=0.5;
+    for(const q of grains){const t=rnd();let cl;
+      if(t<0.68){const v=196+rnd()*40;cl=[v,v-3,v-14];}else if(t<0.84)cl=[186+rnd()*16,170+rnd()*12,150+rnd()*10];else if(t<0.95)cl=[112+rnd()*30,94+rnd()*20,78+rnd()*15];else cl=[26,26,30];
+      const N=16,rot=rnd()<0.6?fabric+(rnd()-.5)*0.8:rnd()*Math.PI,el=0.55+rnd()*0.4;g.beginPath();
+      for(let i=0;i<N;i++){const a=i/N*Math.PI*2,rr=q.r*(0.9+rnd()*0.2),px=Math.cos(a)*rr,py=Math.sin(a)*rr*el,X=q.x+px*Math.cos(rot)-py*Math.sin(rot),Y=q.y+px*Math.sin(rot)+py*Math.cos(rot);i?g.lineTo(X,Y):g.moveTo(X,Y);}
+      g.closePath();g.fillStyle=`rgb(${cl.map(v=>v|0).join(',')})`;g.fill();g.strokeStyle='rgba(60,50,40,.55)';g.lineWidth=1.6;g.stroke();}
+    const id=g.getImageData(0,0,W,H0),d=id.data;for(let p=0;p<d.length;p+=4){const nz=(rnd()-.5)*16;d[p]+=nz;d[p+1]+=nz;d[p+2]+=nz;}g.putImageData(id,0,0);
+    g.fillStyle='#000';g.fillRect(0,H0,W,H-H0);g.fillStyle='#fff';g.fillRect(W-320,H0+40,250,8);g.font='600 22px sans-serif';g.textAlign='center';g.fillText('500 µm',W-195,H0+28);
+    g.textAlign='left';g.fillText('Synthetic sandstone, PPL',24,H0+40);
+    setImage(c,W,H,'Synthetic sandstone');
+    setRoi({x0:0,y0:0,x1:W,y1:H0},true);buildPoints();
+    // seed examples
+    const want={pore:3,solid:4};let tries=0;
+    while((samples.pore.length<want.pore||samples.solid.length<want.solid)&&tries<20000){tries++;const x=20+rnd()*(W-40),y=20+rnd()*(H0-40),p=((y|0)*W+(x|0))*4,r=I.rgba[p],gg=I.rgba[p+1],b=I.rgba[p+2];
+      if(samples.pore.length<want.pore&&b>r+90&&b>150){if(samples.pore.every(s=>Math.hypot(s.x-x,s.y-y)>150))samples.pore.push({x,y,lab:sampleLab(x,y)});}
+      else if(samples.solid.length<want.solid&&Math.abs(r-b)<40&&r>(samples.solid.length<2?185:100)&&r<240){let ok=true;for(let dy=-3;dy<=3&&ok;dy++)for(let dx=-3;dx<=3;dx++){const q=(((y+dy)|0)*W+((x+dx)|0))*4;if(I.rgba[q+2]>I.rgba[q]+60){ok=false;break;}}
+        if(ok&&samples.solid.every(s=>Math.hypot(s.x-x,s.y-y)>150))samples.solid.push({x,y,lab:sampleLab(x,y)});}}
+    P.grainR=18;P.grainRUser=true;umPerOrig=2;autoSuggest(false);syncScaleFields();syncUI();runDetect();
+    segmentGrains();goStep('image');busy(false);
+    toast('Sample loaded with every step pre‑filled. Choose Next to walk through it.');
+  },20);
+}
+$('#sampleBtn').onclick=makeSample;
+
+
+/* =============== guidance: coach banner, fix buttons, next hints =============== */
+function coachText(){
+  switch(tool){
+    case 'roi':return pending?'Now tap the opposite corner of the area to analyse.':'Tap one corner of the area you want to analyse.';
+    case 'calib':return (calibLine&&!$('#calibBox').hidden)?'Now type the scale bar’s length in the panel and choose Set scale.':pending?'Now tap the other end of the scale bar.':'Zoom in on the scale bar, then tap one end of it.';
+    case 'poreSample':return 'Tap pores that aren’t magenta yet. Tap a pink dot to undo one.';
+    case 'solidSample':return 'Tap grains that are wrongly magenta. Tap a yellow square to undo one.';
+    case 'matrixSample':return 'Tap cement or fine matrix; it turns green. Tap a green triangle to undo one.';
+    case 'pick':return 'Tap inside a typical pore.';
+    case 'editPore':return 'Tap a missed pore to add it, or a wrong one to remove it. Tap a white ✕ to restore.';
+    case 'merge':return mergeFirst?'Now tap the neighbouring grain to join them.':'Tap the first of two grains that should be one.';
+    case 'split':return pending?'Now tap inside the other part.':'Tap inside one part of a grain that should be two.';
+    case 'exclGrain':return 'Tap grains to leave them out (they turn grey). Tap again to bring one back.';
+    case 'measure':return pending?'Now tap the end point.':'Tap the start of the distance to measure.';
+    case 'points':return 'Yellow points sit on pore. Tap any point that’s wrong to flip it.';
+  }return '';
+}
+function updateCoach(){const t=I&&tool!=='select'?coachText():'';$('#coach').hidden=!t;$('#coachText').textContent=t;}
+$('#coachDone').onclick=()=>setTool('select');
+$('#ovBtn').onclick=()=>{L.hide=!L.hide;$('#ovBtn').textContent=L.hide?'Show overlay':'Hide overlay';$('#ovBtn').setAttribute('aria-pressed',L.hide);requestDraw();};
+$('#emptyLoad').onclick=()=>$('#file').click();
+$('#emptySample').onclick=()=>makeSample();
+const gHist=[];
+const gSnap=()=>({openConn:P.openConn,openBorder:P.openBorder,openMin:P.openMin,openR:P.openR,openRestore:P.openRestore,gMethod:P.gMethod,neck:P.neck,edgeW:P.edgeW,grainR:P.grainR,grainRUser:P.grainRUser,fillIntra:P.fillIntra,fillAlways:P.fillAlways,darkCut:P.darkCut});
+function adjustGrains(ch,msg){gHist.push(gSnap());Object.assign(P,ch);syncUI();renderGrainStatus();busy(true,'Separating grains…');setTimeout(()=>{segmentGrains();toast(msg);},30);}
+$('#fixUndo').onclick=()=>{const s2=gHist.pop();if(!s2){toast('No adjustment to undo');return;}Object.assign(P,s2);syncUI();renderGrainStatus();busy(true,'Separating grains…');setTimeout(()=>{segmentGrains();toast('Previous settings restored');},30);};
+function ensureSamples(){if(P.mode!=='samples'){if(P.mode==='clusters'&&I.clusters)applyClusters(false);else{P.mode='samples';if(!samples.pore.length){autoSuggest();applyClusters(false);}}syncUI();runDetect();}}
+function nudgePore(dir){
+  if(P.mode==='clusters'){applyClusters(false);toast('Switched to fine adjustment using examples from each colour group');}
+  if(P.mode==='samples'){if(samples.solid.length||samples.matrix.length)P.bias=Math.max(-50,Math.min(50,P.bias+dir*8));else P.tol=Math.max(4,Math.min(80,P.tol+dir*5));}
+  else if(P.mode==='gray')P.grayMax=Math.max(0,Math.min(255,P.grayMax+(P.grayInv?-dir:dir)*8));
+  else{P.hueW=Math.max(4,Math.min(180,P.hueW+dir*10));P.satMin=Math.max(0,Math.min(1,P.satMin-dir*0.04));}
+  syncUI();runDetect();toast(dir>0?'Pore area grown a little. Tap again for more.':'Pore area shrunk a little. Tap again for more.');
+}
+function showScaleBox(which){for(const [k,id] of [['bar','#boxBar'],['dims','#boxDims'],['px','#boxPx']])$(id).hidden=k!==which;
+  $$('[data-fix="scalebar"],[data-fix="dims"],[data-fix="pxsize"]').forEach(b=>b.classList.toggle('on',(b.dataset.fix==='scalebar'&&which==='bar')||(b.dataset.fix==='dims'&&which==='dims')||(b.dataset.fix==='pxsize'&&which==='px')));}
+const FIX={
+  roi:()=>{setTool('roi');toast('Tap two opposite corners on the image');},
+  flatten:()=>{P.flatten=!P.flatten;syncUI();busy(true);setTimeout(()=>{refreshSampleLabs();if(P.mode==='clusters')autoSuggest(true);runDetect();toast(P.flatten?'Lighting evened out':'Lighting correction off');},20);},
+  notebook:()=>{P.clSpace='rgb';P.kInit='kpp';P.clDirect=true;P.gMethod='opening';P.openConn=4;P.openBorder=true;P.openMin=0;P.openRestore=false;syncUI();busy(true,'Grouping colours like the notebook…');
+    setTimeout(()=>{autoSuggest(true);P.mode='clusters';syncUI();renderClusters();runDetect();toast(`Notebook method: ${P.K} K‑means groups on RGB. Give each group its role (the notebook merged the grain groups), then go to step 4.`);},30);},
+  notebook4:()=>{adjustGrains({gMethod:'opening',openConn:4,openBorder:true,openMin:0,openRestore:false},`Erode & dilate like the notebook: disk(${P.openR}) on original pixels, 4‑connected labels.`);},
+  bigimg:()=>{setTool('roi');toast('Draw the area to analyse, then choose “Analyse the drawn area at full resolution” under More options');document.querySelector('details.fine').open=true;},
+  fine:()=>{const r=$('#res');r.value=r.value==='2400'?'1600':'2400';r.onchange({target:r});},
+  scalebar:()=>{showScaleBox('bar');setTool('calib');},
+  dims:()=>{showScaleBox('dims');setTool('select');setTimeout(()=>$('#dimW').focus(),50);},
+  pxsize:()=>{showScaleBox('px');setTool('select');setTimeout(()=>$('#scale').focus(),50);},
+  noscale:()=>{setScale(0);goStep('pores');toast('No scale: results will be in pixels. You can set one later in step 2.');},
+  poresOk:()=>goStep('grains'),
+  swap:()=>$('#swapBtn').click(),
+  tapPores:()=>{ensureSamples();setTool('poreSample');},
+  tapGrains:()=>{ensureSamples();setTool('solidSample');},
+  matrix:()=>{ensureSamples();setTool('matrixSample');},
+  morePore:()=>nudgePore(1),lessPore:()=>nudgePore(-1),
+  speckle:()=>{P.denoise=true;P.smooth=true;P.minSize=Math.max(12,P.minSize*2);P.fillHoles=Math.max(40,P.fillHoles);syncUI();refreshSampleLabs();runDetect();toast(`Noise cleaned: pores under ${P.minSize} px removed. Tap again for more.`);},
+  fixOne:()=>setTool('editPore'),
+  restart:()=>$('#autoBtn').click(),
+  grainsOk:()=>goStep('results'),
+  joined:()=>P.gMethod==='opening'?adjustGrains({openR:Math.min(40,+(P.openR*1.3+0.5).toFixed(1))},'Larger disk: thicker bridges are cut.'):adjustGrains({neck:Math.min(98,P.neck+4),edgeW:Math.min(100,P.edgeW+15)},'Splitting more readily. Tap again if grains are still joined.'),
+  cut:()=>P.gMethod==='opening'?adjustGrains({openR:Math.max(0.5,+(P.openR/1.3).toFixed(1)),openRestore:true},'Smaller disk, and trimmed edges given back to the grains.'):adjustGrains({neck:Math.max(40,P.neck-6),edgeW:Math.max(0,P.edgeW-15),grainRUser:true,grainR:Math.min(120,Math.round(P.grainR*1.25)+1)},'Splitting less readily. Tap again if grains are still cut.'),
+  small:()=>P.gMethod==='opening'?adjustGrains({openR:Math.max(0.5,+(P.openR/1.3).toFixed(1))},'Smaller disk: narrower grains survive.'):adjustGrains({grainRUser:true,grainR:Math.max(3,Math.round(P.grainR*0.75))},'Smaller grains allowed. Tap again for even smaller.'),
+  holes:()=>adjustGrains({fillIntra:true,fillAlways:true},'Holes inside grains now count as part of the grain.'),
+  handGrains:()=>{$('#handTools').hidden=false;setTool('merge');},
+  resetGrains:()=>adjustGrains({neck:90,edgeW:50,grainRUser:false,fillIntra:true,fillAlways:false,darkCut:0},'Back to automatic settings.'),
+  plots:()=>$('#dash').scrollIntoView({behavior:'smooth',block:'start'}),
+  pointcount:()=>{setTool('points');toast('Point count shown on the image');},
+  measure:()=>setTool('measure'),
+  another:()=>{goStep('image');$('#file').click();}
+};
+document.addEventListener('click',e=>{const b=e.target.closest('[data-fix]');if(!b||!FIX[b.dataset.fix])return;if(!I&&!['another'].includes(b.dataset.fix)){toast('Load an image first');return;}FIX[b.dataset.fix]();});
+$$('[data-settool]').forEach(b=>b.onclick=()=>setTool(b.dataset.settool));
+function renderNextHint(){
+  const h=$('#nextHint');let t='';
+  if(!I)t='Load an image or try the sample to begin.';
+  else if(step==='scale'&&!umPerOrig)t='No scale yet. Next keeps results in pixels.';
+  else if(step==='pores'&&!pore.n&&!pore.matN)t='No pores found yet. Tap “Some pores are missed” if there should be some.';
+  else if(step==='grains'&&!grain)t='Grains are being separated…';
+  h.textContent=t;
+  const si=$('#scaleInfo');if(si)si.classList.toggle('good',!!umPerOrig);
+}
+
+/* =============== start =============== */
+resize();syncUI();goStep('image');
+if(window.claude&&typeof window.claude.use==='function'){
+  window.claude.use('downloads').then(d=>{downloads=d;}).catch(()=>{});
+}
+})();
+</script>
+</body>
+</html>

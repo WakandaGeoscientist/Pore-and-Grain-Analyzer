@@ -205,6 +205,19 @@ tbody tr.ex{opacity:.45}
 details.fine{margin-top:12px;border-top:1px solid var(--line);padding-top:8px}
 details.fine summary{cursor:pointer;font-weight:600;font-size:14px;padding:6px 0;list-style-position:inside}
 details.fine[open] summary{margin-bottom:4px}
+
+.shwrap{background:repeating-conic-gradient(var(--surface-2) 0 25%,var(--bg) 0 50%) 0 0/22px 22px;border-radius:10px;display:flex;align-items:center;justify-content:center;padding:14px;min-height:300px}
+#shCanvas{display:block;max-width:100%;max-height:min(68vh,780px);width:auto;height:auto;border-radius:6px;box-shadow:0 10px 30px rgba(0,0,0,.28);touch-action:none;cursor:grab}
+#shCanvas:active{cursor:grabbing}
+.shacts{justify-content:center}
+.shfmt .fix{display:grid;grid-template-columns:34px 1fr;grid-template-rows:auto auto;column-gap:10px;align-items:center}
+.shfmt .fix b,.shfmt .fix small{grid-column:2}
+.arbox{grid-row:1/3;grid-column:1;justify-self:center;display:block;border:2px solid var(--muted);border-radius:4px}
+.fix.on .arbox{border-color:var(--epoxy)}
+.shstats .check{margin:4px 0}
+input[type=text],textarea{font:inherit;font-size:14px;color:var(--ink);background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:7px 9px;width:100%}
+textarea{resize:vertical;line-height:1.45}
+input[type=text]:focus-visible,textarea:focus-visible{outline:2px solid var(--epoxy);outline-offset:1px}
 [hidden]{display:none !important}
 @media (prefers-reduced-motion:reduce){*{transition:none !important}}
 </style>
@@ -213,7 +226,7 @@ details.fine[open] summary{margin-bottom:4px}
 <div class="wrap">
   <header>
     <h1>Thin section porosity &amp; grains</h1>
-    <p>Work through the five steps: load an image, set the scale, find the pores, separate the grains, then explore the results.</p>
+    <p>Work through the steps: load an image, set the scale, find the pores, separate the grains, explore the results, then turn them into a post to share.</p>
   </header>
 
   <ol class="stepper" id="stepper"></ol>
@@ -243,7 +256,7 @@ details.fine[open] summary{margin-bottom:4px}
             <button id="z11" class="txt" aria-label="Actual pixels">1:1</button>
           </div>
         </div>
-        <div class="layers">
+        <div class="layers" id="layersBar">
           <label><input type="checkbox" id="lyPores" checked><span class="sw" style="background:var(--pore)"></span>Pores</label>
           <label><input type="checkbox" id="lyGrains" checked><span class="sw" style="background:var(--grain)"></span>Grain outlines</label>
           <label><input type="checkbox" id="lyFill">Colour grains</label>
@@ -251,6 +264,16 @@ details.fine[open] summary{margin-bottom:4px}
           <span class="spacer"></span>
           <span id="imgInfo">No image loaded</span>
         </div>
+        <div id="shareView" hidden>
+          <div class="shwrap" id="shWrap"><canvas id="shCanvas" aria-label="Preview of the social media image"></canvas></div>
+          <p class="small" id="shSize" style="text-align:center;margin:8px 0 10px"></p>
+          <div class="row shacts">
+            <button id="shSave" class="primary">Save image</button>
+            <button id="shShare">Share…</button>
+            <button id="shAll">Save all sizes</button>
+          </div>
+        </div>
+
       </div>
     </section>
 
@@ -462,6 +485,7 @@ details.fine[open] summary{margin-bottom:4px}
             <button class="fix ok" data-fix="plots"><b>See the plots and tables</b><small>Size, shape and fabric</small></button>
             <button class="fix" data-fix="pointcount"><b>Check porosity by point counting</b><small>A grid you can correct by tapping</small></button>
             <button class="fix" data-fix="measure"><b>Measure a distance</b><small>Tap two points on the image</small></button>
+            <button class="fix nb" data-fix="share"><b>Make a social media post</b><small>Ready‑to‑post images and a caption</small></button>
             <button class="fix" data-fix="another"><b>Analyse another image</b><small>Keeps nothing from this one</small></button>
           </div>
           <p id="pcOut" class="status" hidden></p>
@@ -478,6 +502,44 @@ details.fine[open] summary{margin-bottom:4px}
             <label class="check"><input type="checkbox" id="edgeEx" checked> Leave objects cut by the edge of the analysis area out of size and shape statistics</label>
             <div class="field"><div class="lbl"><label for="nPts">Point‑count grid</label></div><select id="nPts"><option>100</option><option>200</option><option selected>300</option><option>500</option><option>1000</option></select></div>
           </details>
+        </div>
+
+        <!-- STEP 6 -->
+        <div data-step="share" hidden>
+          <h2>6. Share your results</h2>
+          <p class="lead">Turn your analysis into a ready‑to‑post image in a few taps. The preview updates as you go; drag the photo in it to reposition, and scroll, pinch or use the zoom slider to zoom.</p>
+          <p class="status" id="shStatus" hidden></p>
+          <h3>Where will you post it?</h3>
+          <div class="fixes shfmt" id="shFmt"></div>
+          <h3>Pick a design</h3>
+          <div class="fixes" id="shLayout"></div>
+          <h3>What to show</h3>
+          <div class="field"><div class="lbl"><label for="shStyle">On the photo</label></div>
+            <select id="shStyle"><option value="original">The original image</option><option value="pores">Pores highlighted</option><option value="outlines">Grain outlines</option><option value="grains">Grains in colour</option><option value="groups">Colour groups</option></select></div>
+          <div class="field" id="shChartF"><div class="lbl"><label for="shChart">Chart</label></div>
+            <select id="shChart"><option value="grain">Grain size distribution</option><option value="pore">Pore size distribution</option><option value="comp">What the rock is made of</option></select></div>
+          <div class="field"><div class="lbl"><label for="shHead">Headline number</label></div><select id="shHead"></select></div>
+          <p class="small" style="margin:6px 0 2px">More numbers to include <span id="shMax"></span></p>
+          <div id="shStats" class="shstats"></div>
+          <h3>Words</h3>
+          <div class="field"><div class="lbl"><label for="shTitle">Title</label></div><input id="shTitle" type="text" maxlength="80" placeholder="e.g. Jurassic sandstone, North Sea"></div>
+          <div class="field"><div class="lbl"><label for="shSub">Subtitle <span class="opt">optional</span></label></div><input id="shSub" type="text" maxlength="90" placeholder="e.g. Plane‑polarised light, blue epoxy, 4× objective"></div>
+          <div class="field"><div class="lbl"><label for="shCredit">Your name or handle <span class="opt">optional</span></label></div><input id="shCredit" type="text" maxlength="50" placeholder="e.g. @rocklab"></div>
+          <h3>Look</h3>
+          <div class="seg" role="group" aria-label="Colour theme" id="shTheme">
+            <button data-shth="dark">Dark</button><button data-shth="light">Light</button><button data-shth="ocean">Ocean</button><button data-shth="sand">Sand</button>
+          </div>
+          <div class="seg" role="group" aria-label="Framing" style="margin-top:8px">
+            <button data-shfit="fill">Fill the frame</button><button data-shfit="fit">Show the whole image</button>
+          </div>
+          <div class="field"><div class="lbl"><label for="shZoom">Zoom</label><output id="shZoomo"></output></div><input id="shZoom" type="range" min="1" max="12" step="0.05" value="1"></div>
+          <div class="row"><button id="shReset">Reset framing</button></div>
+          <label class="check"><input type="checkbox" id="shScale" checked> Scale bar on the photo <span class="opt" id="shScaleNote"></span></label>
+          <label class="check"><input type="checkbox" id="shLink" checked> Mention this app in the corner</label>
+          <h3>Caption</h3>
+          <textarea id="shCaption" rows="8" aria-label="Caption"></textarea>
+          <div class="row" style="margin-top:6px"><button id="shCopy" class="primary">Copy caption</button><button id="shRecap">Write it again</button></div>
+          <p class="small">The caption is written from your results; edit it freely. Images are made in your browser at full post size, and nothing is uploaded.</p>
         </div>
 
         <div class="nav"><button id="backBtn">Back</button><button id="nextBtn" class="primary">Next</button></div>
@@ -1016,6 +1078,7 @@ function scheduleSegment(){if(!I)return;busy(true,'Separating grains…');clearT
 function grainColor(id){const h=(id*137.508)%360,s=.65,l=.55,c=(1-Math.abs(2*l-1))*s,x=c*(1-Math.abs((h/60)%2-1)),m=l-c/2;let r=0,g=0,b=0;
   if(h<60){r=c;g=x;}else if(h<120){r=x;g=c;}else if(h<180){g=c;b=x;}else if(h<240){g=x;b=c;}else if(h<300){r=x;b=c;}else{r=c;b=x;}return [(r+m)*255|0,(g+m)*255|0,(b+m)*255|0];}
 function buildGrainCanvas(){
+  if(grain)grain._card=null;
   if(!grain){grainCanvas=null;return;}const {W,H,n}=I;
   if(!grainCanvas||grainCanvas.width!==W||grainCanvas.height!==H){grainCanvas=document.createElement('canvas');grainCanvas.width=W;grainCanvas.height=H;}
   const c=grainCanvas.getContext('2d'),id=c.createImageData(W,H),o=id.data,g=grain.lab,ex=grain.excluded,pal=[];
@@ -1116,7 +1179,7 @@ function grainSummary(){
 }
 
 /* =============== steps & tools =============== */
-const STEPS=[{id:'image',t:'Image'},{id:'scale',t:'Scale'},{id:'pores',t:'Pores'},{id:'grains',t:'Grains'},{id:'results',t:'Results'}];
+const STEPS=[{id:'image',t:'Image'},{id:'scale',t:'Scale'},{id:'pores',t:'Pores'},{id:'grains',t:'Grains'},{id:'results',t:'Results'},{id:'share',t:'Share'}];
 const TOOLS={select:'Pan & select',roi:'Draw analysis area',calib:'Draw scale line',poreSample:'Tap pores',solidSample:'Tap grains',matrixSample:'Tap matrix / cement',pick:'Pick pore colour',editPore:'Fix pores',merge:'Merge grains',split:'Split grain',exclGrain:'Exclude grain',measure:'Measure',points:'Point count'};
 const HINTS={select:'Drag to pan, pinch or scroll to zoom. Tap a pore or grain to see its measurements.',roi:'Tap one corner of the area to analyse, then the opposite corner.',
   calib:'Tap one end of the scale bar, then the other end.',poreSample:'Tap inside pores. Tap a pink marker to remove it.',solidSample:'Tap grains, cement or matrix. Tap a yellow marker to remove it.',
@@ -1124,12 +1187,12 @@ const HINTS={select:'Drag to pan, pinch or scroll to zoom. Tap a pore or grain t
   merge:'Tap a grain, then the neighbour to join it to.',split:'Tap inside each of the two grains that were joined. The cut follows the narrowest point or the visible contact.',matrixSample:'Tap cement, matrix or fine‑grained material that should not count as grains. Tap a green marker to remove it.',exclGrain:'Tap a grain to exclude it, or tap again to include it.',
   measure:'Tap two points to measure a distance.',points:'Tap a grid point to switch it between pore and solid.'};
 function stepTools(){return {image:['select','roi'],scale:['select','calib'],pores:(P.mode==='samples'||P.mode==='clusters')?['select','poreSample','solidSample','matrixSample','editPore']:P.mode==='hsv'?['select','pick','editPore']:['select','editPore'],
-  grains:['select','merge','split','exclGrain'],results:['select','measure','points']}[step];}
+  grains:['select','merge','split','exclGrain'],results:['select','measure','points'],share:['select']}[step];}
 function renderStepper(){
   const st=$('#stepper'),idx=STEPS.findIndex(s=>s.id===step);
   const status={image:I?'Loaded':'Start here',scale:umPerOrig?`${(+umPerOrig.toPrecision(3))} µm/px`:'Optional',pores:I&&pore?`${poreSummary().phi.toFixed(1)}% ${PH().lower}`:'',
-    grains:grain?(grain.stale?'Needs update':`${grain.objs.length} grains`):'',results:''};
-  const done={image:!!I,scale:umPerOrig>0,pores:!!(I&&pore&&pore.n),grains:!!(grain&&!grain.stale),results:false};
+    grains:grain?(grain.stale?'Needs update':`${grain.objs.length} grains`):'',results:'',share:'Social posts'};
+  const done={image:!!I,scale:umPerOrig>0,pores:!!(I&&pore&&pore.n),grains:!!(grain&&!grain.stale),results:false,share:false};
   st.innerHTML=STEPS.map((s,i)=>`<li><button data-go="${s.id}" ${s.id===step?'aria-current="step"':''} class="${done[s.id]&&s.id!==step?'done':''}" ${!I&&i>0?'disabled':''}><span class="num">${done[s.id]&&s.id!==step?'✓':i+1}</span><span class="t"><b>${s.t}</b><small>${status[s.id]||'&nbsp;'}</small></span></button></li>`).join('');
   $('#backBtn').disabled=idx===0;
   const nx=STEPS[idx+1];$('#nextBtn').textContent=nx?`Next: ${nx.t}`:'Back to start';
@@ -1146,6 +1209,7 @@ function goStep(id){
   setTool(def);
   if(id==='grains'&&I&&(!grain||grain.stale)){busy(true,'Separating grains…');setTimeout(segmentGrains,40);}
   $('#dash').hidden=id!=='results';
+  {const sh=id==='share';$('#tools').hidden=sh;$('#toolhint').hidden=sh;$('#stage').hidden=sh;$('#layersBar').hidden=sh;$('#shareView').hidden=!sh;if(sh){$('#selCard').hidden=true;openShare();}else{resize();}}
   refreshAll();
   if(window.innerWidth<980&&id!=='image')$('#stepPanel').scrollIntoView({behavior:'smooth',block:'start'});
 }
@@ -1745,6 +1809,7 @@ const FIX={
   plots:()=>$('#dash').scrollIntoView({behavior:'smooth',block:'start'}),
   pointcount:()=>{setTool('points');toast('Point count shown on the image');},
   measure:()=>setTool('measure'),
+  share:()=>goStep('share'),
   another:()=>{goStep('image');$('#file').click();}
 };
 document.addEventListener('click',e=>{const b=e.target.closest('[data-fix]');if(!b||!FIX[b.dataset.fix])return;if(!I&&!['another'].includes(b.dataset.fix)){toast('Load an image first');return;}FIX[b.dataset.fix]();});
@@ -1758,6 +1823,276 @@ function renderNextHint(){
   h.textContent=t;
   const si=$('#scaleInfo');if(si)si.classList.toggle('good',!!umPerOrig);
 }
+
+
+/* =============== share: social-media images =============== */
+const SERIF='"Instrument Serif", Georgia, "Times New Roman", serif',SANS='"Instrument Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+const SH_FMT={
+  square:{w:1080,h:1080,name:'Square post',hint:'Instagram, Facebook, LinkedIn',ar:'1/1'},
+  portrait:{w:1080,h:1350,name:'Portrait post',hint:'Instagram, Facebook feed',ar:'4/5'},
+  story:{w:1080,h:1920,name:'Story or Reel',hint:'Instagram, TikTok, Shorts',ar:'9/16'},
+  wide:{w:1600,h:900,name:'Landscape',hint:'X, LinkedIn, YouTube, slides',ar:'16/9'},
+  link:{w:1200,h:630,name:'Link banner',hint:'Facebook, LinkedIn, blogs',ar:'1.91/1'}};
+const SH_LAYOUT={
+  spot:{name:'Spotlight',hint:'Full‑bleed photo, big number'},
+  split:{name:'Before & after',hint:'Original next to the result'},
+  card:{name:'Results card',hint:'Photo and a grid of numbers'},
+  chart:{name:'Chart',hint:'A size distribution or makeup'}};
+const SH_THEME={
+  dark:{bg:[14,19,22],ink:'#f2f5f6',muted:'#9eacb3',panel:'rgba(255,255,255,0.07)',line:'rgba(255,255,255,0.14)',accent:'#f0559e',grain:'#f2c200'},
+  light:{bg:[246,243,236],ink:'#1b2328',muted:'#5b6a72',panel:'rgba(0,0,0,0.05)',line:'rgba(0,0,0,0.12)',accent:'#c21d72',grain:'#a77a00'},
+  ocean:{bg:[12,40,80],ink:'#f3f7fc',muted:'#a9c0de',panel:'rgba(255,255,255,0.09)',line:'rgba(255,255,255,0.18)',accent:'#ff74b6',grain:'#ffd23f'},
+  sand:{bg:[232,220,198],ink:'#2b2118',muted:'#6d5c4a',panel:'rgba(80,50,20,0.07)',line:'rgba(80,50,20,0.15)',accent:'#b0245f',grain:'#8a5a00'}};
+const ST_ORDER=['phi','matrix','pores','poreEcd','grains','grainSize','sorting','ar','fabric'];
+const ST_NAMES={phi:'Porosity',matrix:'Matrix / cement',pores:'Number of pores',poreEcd:'Mean pore size',grains:'Number of grains',grainSize:'Mean grain size',sorting:'Sorting',ar:'Grain elongation',fabric:'Grain fabric'};
+const SH={fmt:'portrait',layout:'spot',style:'pores',chart:'grain',theme:'dark',title:'',sub:'',credit:'',head:'phi',stats:new Set(['grains','grainSize','sorting','poreEcd']),
+  scalebar:true,link:true,fit:'fill',z:1,cx:null,cy:null,capEdited:false,forImage:null,rects:[]};
+
+function shareStats(){
+  const o={};if(!I||!pore)return o;const s=poreSummary(),u=uL(),isPore=P.phase==='pore';
+  o.phi={label:isPore?'image porosity':PH().lower,v:s.phi.toFixed(1),unit:'%',long:`${PH().name}: ${s.phi.toFixed(1)}% of the analysed area`};
+  if(pore.matN)o.matrix={label:'matrix / cement',v:(pore.matN/I.roiN*100).toFixed(1),unit:'%',long:`Matrix / cement: ${(pore.matN/I.roiN*100).toFixed(1)}%`};
+  o.pores={label:isPore?'pores measured':'areas measured',v:s.count.toLocaleString(),unit:'',long:`${s.count.toLocaleString()} separate ${isPore?'pores':'areas'} measured`};
+  if(s.cnt)o.poreEcd={label:isPore?'mean pore size':'mean size',v:nf(Lv(s.meanEcd)),unit:' '+u,long:`Mean ${isPore?'pore ':''}diameter ${nf(Lv(s.meanEcd))} ${u}`};
+  if(grain&&grain.objs.length){const g=grainSummary();
+    if(g.cnt)o.grains={label:'grains measured',v:g.cnt.toLocaleString(),unit:'',long:`${g.cnt.toLocaleString()} grains measured`};
+    if(kUm()&&g.fw){const um=Math.pow(2,-g.Mz)*1000,cls=wentworth(um/1000);o.grainSize={label:`mean grain size · ${cls}`,v:nf(um),unit:' µm',long:`Mean grain size ${nf(um)} µm (${g.Mz.toFixed(2)} φ, ${cls})`};}
+    else if(g.cnt)o.grainSize={label:'mean grain size',v:nf(Lv(g.meanEcd)),unit:' '+u,long:`Mean grain diameter ${nf(Lv(g.meanEcd))} ${u}`};
+    if(g.fw)o.sorting={label:sortClass(g.fw.sd),v:g.fw.sd.toFixed(2),unit:' φ',long:`Sorting ${g.fw.sd.toFixed(2)} φ: ${sortClass(g.fw.sd)}`};
+    if(g.cnt)o.ar={label:'mean grain aspect ratio',v:nf(g.ar),unit:'',long:`Grains are on average ${nf(g.ar)} times longer than wide`};
+    if(g.cnt>=10)o.fabric={label:`grain long‑axis trend · strength ${g.R.toFixed(2)}`,v:g.meanOrient.toFixed(0),unit:'°',long:`Grain long axes trend ${g.meanOrient.toFixed(0)}° (fabric strength ${g.R.toFixed(2)})`};}
+  return o;
+}
+function defaultTitle(){let n=(I.name||'').replace(/\.[^.]+$/,'').replace(/ \(area\)$/,'').replace(/[_]+/g,' ').trim();
+  if(!n||/^(img|dsc|dscn|image|photo|pxl|screenshot|scan)[\s-]*\d*$/i.test(n)||/^[\d\s-]+$/.test(n))return 'Thin‑section analysis';return n;}
+function appUrl(){try{if(!/^https?:/.test(location.protocol)||/claude/i.test(location.host))return '';return location.origin+location.pathname.replace(/index\.html$/,'');}catch(e){return '';}}
+function linkText(){const u=appUrl().replace(/^https?:\/\//,'').replace(/\/$/,'');return u?`Made with ${u}`:'Made with Thin Section Porosity & Grain Analyser';}
+const rgba=(a,al)=>`rgba(${a[0]},${a[1]},${a[2]},${al})`;
+function rrect(c,x,y,w,h,r){r=Math.max(0,Math.min(r,w/2,h/2));c.beginPath();c.moveTo(x+r,y);c.arcTo(x+w,y,x+w,y+h,r);c.arcTo(x+w,y+h,x,y+h,r);c.arcTo(x,y+h,x,y,r);c.arcTo(x,y,x+w,y,r);c.closePath();}
+function fitFont(c,text,fam,weight,size,maxW,min){let s=size;c.font=`${weight} ${s}px ${fam}`;while(s>(min||8)&&c.measureText(text).width>maxW){s*=0.93;c.font=`${weight} ${s}px ${fam}`;}return s;}
+function wrapLines(c,text,maxW,maxLines){const words=String(text).split(/\s+/).filter(Boolean),lines=[];let cur='';
+  for(const w of words){const t=cur?cur+' '+w:w;if(c.measureText(t).width<=maxW||!cur)cur=t;else{lines.push(cur);cur=w;}}if(cur)lines.push(cur);
+  if(maxLines&&lines.length>maxLines){const keep=lines.slice(0,maxLines);let last=keep[maxLines-1]+' '+lines.slice(maxLines).join(' ');while(c.measureText(last+'…').width>maxW&&last.length>1)last=last.slice(0,-1);keep[maxLines-1]=last.trimEnd()+'…';return keep;}
+  return lines;}
+function cardGrain(fill){if(!grain)return null;grain._card=grain._card||{};const key=fill?'f':'o';if(grain._card[key])return grain._card[key];
+  const {W,H,n}=I,g=grain.lab,ex=grain.excluded,cv=document.createElement('canvas');cv.width=W;cv.height=H;const cx=cv.getContext('2d'),id=cx.createImageData(W,H),o=id.data,pal=[],thick=Math.max(W,H)>1400;
+  for(let i=0,p=0;i<n;i++,p+=4){const l=g[i];if(!l)continue;const x=i%W;
+    let b=(x>0&&g[i-1]!==l)||(x<W-1&&g[i+1]!==l)||(i>=W&&g[i-W]!==l)||(i<n-W&&g[i+W]!==l);
+    if(!b&&thick)b=(x>1&&g[i-2]!==l)||(x<W-2&&g[i+2]!==l)||(i>=2*W&&g[i-2*W]!==l)||(i<n-2*W&&g[i+2*W]!==l);
+    if(b){if(fill){o[p]=15;o[p+1]=15;o[p+2]=15;o[p+3]=210;}else{o[p]=255;o[p+1]=205;o[p+2]=0;o[p+3]=255;}}
+    else if(fill&&!ex.has(l)){const cc=pal[l]||(pal[l]=grainColor(l));o[p]=cc[0];o[p+1]=cc[1];o[p+2]=cc[2];o[p+3]=150;}}
+  cx.putImageData(id,0,0);return grain._card[key]=cv;}
+function overlayFor(style){
+  if(style==='pores')return poreCanvas?[poreCanvas,0.72]:null;
+  if(style==='outlines')return grain?[cardGrain(false),1]:(poreCanvas?[poreCanvas,0.72]:null);
+  if(style==='grains')return grain?[cardGrain(true),1]:(poreCanvas?[poreCanvas,0.72]:null);
+  if(style==='groups')return I.clCanvas?[I.clCanvas,0.8]:null;
+  return null;}
+function styleName(style){return {original:'Original image',pores:P.phase==='pore'?'Pores highlighted':`${PH().name} highlighted`,outlines:grain?'Grains outlined':'Pores highlighted',grains:grain?'Grains separated':'Pores highlighted',groups:'Colour groups'}[style];}
+function drawPhoto(c,R,radius,T,style){
+  const rw=roi.x1-roi.x0,rh=roi.y1-roi.y0,cover=Math.max(R.w/rw,R.h/rh),contain=Math.min(R.w/rw,R.h/rh),s=(SH.fit==='fit'?contain:cover)*SH.z,sw=R.w/s,sh=R.h/s;
+  if(SH.cx==null){SH.cx=roi.x0+rw/2;SH.cy=roi.y0+rh/2;}
+  const cl=(v,sz,a,b)=>sz>=b-a?(a+b)/2:Math.min(b-sz/2,Math.max(a+sz/2,v));
+  const cx=cl(SH.cx,sw,roi.x0,roi.x1),cy=cl(SH.cy,sh,roi.y0,roi.y1),sx=cx-sw/2,sy=cy-sh/2;
+  const ix0=Math.max(sx,roi.x0),iy0=Math.max(sy,roi.y0),ix1=Math.min(sx+sw,roi.x1),iy1=Math.min(sy+sh,roi.y1);
+  c.save();rrect(c,R.x,R.y,R.w,R.h,radius);c.clip();c.fillStyle=rgba(T.bg.map(v=>v*0.7|0),1);c.fillRect(R.x,R.y,R.w,R.h);
+  if(ix1>ix0&&iy1>iy0){const dx=R.x+(ix0-sx)*s,dy=R.y+(iy0-sy)*s,dw=(ix1-ix0)*s,dh=(iy1-iy0)*s;
+    c.imageSmoothingEnabled=true;c.imageSmoothingQuality='high';c.drawImage(I.base,ix0,iy0,ix1-ix0,iy1-iy0,dx,dy,dw,dh);
+    const ov=overlayFor(style);if(ov&&ov[0]){c.imageSmoothingEnabled=s<1.5;c.globalAlpha=ov[1];c.drawImage(ov[0],ix0,iy0,ix1-ix0,iy1-iy0,dx,dy,dw,dh);c.globalAlpha=1;}}
+  c.restore();
+  SH.rects.push({R,s});return s;}
+function drawScaleBar(c,R,s,u,corner){const k=kUm();if(!SH.scalebar||!k)return;
+  const um=niceNum(R.w*0.2/s*k),len=um/k*s,txt=um>=1000?`${+(um/1000).toPrecision(3)} mm`:`${um} µm`;
+  c.font=`600 ${20*u}px ${SANS}`;const tw=c.measureText(txt).width,bw=Math.max(len,tw)+30*u,bh=60*u,m=20*u;
+  const x=corner[1]==='r'?R.x+R.w-bw-m:R.x+m,y=corner[0]==='t'?R.y+m:R.y+R.h-bh-m;
+  c.fillStyle='rgba(0,0,0,0.55)';rrect(c,x,y,bw,bh,10*u);c.fill();
+  c.fillStyle='#fff';c.fillRect(x+(bw-len)/2,y+bh-20*u,len,6*u);c.textAlign='center';c.textBaseline='alphabetic';c.fillText(txt,x+bw/2,y+28*u);}
+function pill(c,text,x,y,u){c.font=`600 ${21*u}px ${SANS}`;const w=c.measureText(text).width+28*u,h=40*u;c.fillStyle='rgba(0,0,0,0.6)';rrect(c,x,y,w,h,h/2);c.fill();c.fillStyle='#fff';c.textAlign='left';c.textBaseline='middle';c.fillText(text,x+14*u,y+h/2+1*u);}
+function drawFooter(c,x0,x1,y,u,T){
+  c.textBaseline='alphabetic';const lt=SH.link?linkText():'',cr=SH.credit.trim();
+  if(cr){c.font=`600 ${22*u}px ${SANS}`;c.fillStyle=T.ink;c.textAlign='left';c.fillText(cr,x0,y);}
+  if(lt){const avail=(x1-x0)-(cr?c.measureText(cr).width+30*u:0);fitFont(c,lt,SANS,500,20*u,avail,10);c.fillStyle=T.muted;c.textAlign=cr?'right':'left';c.fillText(lt,cr?x1:x0,y);}}
+function statTile(c,x,y,w,h,st,u,T,big){
+  c.fillStyle=T.panel;rrect(c,x,y,w,h,16*u);c.fill();
+  const p=18*u,vs=fitFont(c,st.v+st.unit,SERIF,400,(big?64:50)*u,w-2*p,12);c.fillStyle=T.ink;c.textAlign='left';c.textBaseline='alphabetic';
+  c.fillText(st.v+st.unit,x+p,y+p+vs*0.8);
+  c.font=`500 ${19*u}px ${SANS}`;c.fillStyle=T.muted;const ls=wrapLines(c,st.label,w-2*p,2);ls.forEach((l,i)=>c.fillText(l,x+p,y+p+vs*0.8+30*u+i*24*u));}
+function chipStats(st,n){return ST_ORDER.filter(k=>k!==SH.head&&SH.stats.has(k)&&st[k]).slice(0,n).map(k=>st[k]);}
+function headStat(st){return st[SH.head]||st.phi;}
+function drawHeadline(c,x,yBase,maxW,u,T,st,size){const h=headStat(st);if(!h)return 0;
+  const s=fitFont(c,h.v+h.unit,SERIF,400,size*u,maxW*0.62,20);c.fillStyle=T.ink;c.textAlign='left';c.textBaseline='alphabetic';c.fillText(h.v+h.unit,x,yBase);
+  const nw=c.measureText(h.v+h.unit).width;c.fillStyle=T.accent;c.font=`600 ${Math.max(18,26*u)}px ${SANS}`;
+  const lab=wrapLines(c,h.label,maxW-nw-24*u,2);lab.forEach((l,i)=>c.fillText(l,x+nw+22*u,yBase-(lab.length-1-i)*32*u));return s;}
+
+/* ---- layouts ---- */
+function layoutSpot(c,W,H,u,T,st){
+  const pad=56*u;drawPhoto(c,{x:0,y:0,w:W,h:H},0,T,SH.style);
+  let g=c.createLinearGradient(0,H*0.32,0,H);g.addColorStop(0,rgba(T.bg,0));g.addColorStop(0.5,rgba(T.bg,0.82));g.addColorStop(1,rgba(T.bg,0.97));c.fillStyle=g;c.fillRect(0,H*0.32,W,H*0.68);
+  g=c.createLinearGradient(0,0,0,170*u);g.addColorStop(0,'rgba(0,0,0,0.55)');g.addColorStop(1,'rgba(0,0,0,0)');c.fillStyle=g;c.fillRect(0,0,W,170*u);
+  const kick=(SH.sub||'Thin‑section image analysis').toUpperCase();c.font=`600 ${21*u}px ${SANS}`;c.fillStyle='#fff';c.textAlign='left';c.textBaseline='top';fitFont(c,kick,SANS,600,21*u,W*0.6,10);c.fillText(kick,pad,pad*0.8);
+  drawScaleBar(c,{x:0,y:pad*0.3,w:W,h:H},SH.rects[0].s,u,'tr');
+  let y=H-pad;drawFooter(c,pad,W-pad,y,u,T);y-=52*u;
+  const n=W/H>1.4?4:3,chips=chipStats(st,n);
+  if(chips.length){const gap=14*u,ch=118*u,cw=(W-2*pad-gap*(n-1))/n;chips.forEach((s2,i)=>statTile(c,pad+i*(cw+gap),y-ch,cw,ch,s2,u,T));y-=ch+40*u;}
+  const hs=drawHeadline(c,pad,y,W-2*pad,u,T,st,W/H>1.4?150:170);y-=hs*0.95+18*u;
+  c.font=`400 ${62*u}px ${SERIF}`;c.fillStyle=T.ink;c.textBaseline='alphabetic';const tl=wrapLines(c,SH.title,W-2*pad,2);
+  for(let i=tl.length-1;i>=0;i--){c.fillText(tl[i],pad,y);y-=64*u;}
+}
+function header(c,x,y,w,u,T,size){c.textBaseline='alphabetic';c.textAlign='left';c.fillStyle=T.ink;
+  const ts=fitFont(c,SH.title,SERIF,400,(size||60)*u,w,20);y+=ts*0.85;c.fillText(SH.title,x,y);
+  if(SH.sub){c.font=`500 ${24*u}px ${SANS}`;c.fillStyle=T.muted;fitFont(c,SH.sub,SANS,500,24*u,w,10);y+=38*u;c.fillText(SH.sub,x,y);}
+  return y;}
+function layoutSplit(c,W,H,u,T,st){
+  const pad=52*u,gap=16*u;c.fillStyle=rgba(T.bg,1);c.fillRect(0,0,W,H);
+  let y=header(c,pad,pad,W-2*pad,u,T,56)+30*u;
+  const footY=H-pad;drawFooter(c,pad,W-pad,footY,u,T);let bottom=footY-48*u;
+  const short=H/u<760,n=W/H>1.4?4:3,chips=chipStats(st,n-1),hs=headStat(st),all=hs?[hs,...chips]:chips;
+  if(short){c.font=`600 ${24*u}px ${SANS}`;c.fillStyle=T.ink;c.textAlign='left';const line=all.map(s2=>`${s2.v}${s2.unit} ${s2.label}`).join('   ·   ');fitFont(c,line,SANS,600,24*u,W-2*pad,10);c.fillText(line,pad,bottom);bottom-=40*u;}
+  else if(all.length){const ch=118*u,k=all.length,cw=(W-2*pad-gap*(k-1))/k;all.forEach((s2,i)=>statTile(c,pad+i*(cw+gap),bottom-ch,cw,ch,s2,u,T,i===0));bottom-=ch+24*u;}
+  const side=W/H>=0.95,aw=W-2*pad,ah=bottom-y,style=SH.style==='original'?'pores':SH.style;
+  const R1=side?{x:pad,y,w:(aw-gap)/2,h:ah}:{x:pad,y,w:aw,h:(ah-gap)/2},R2=side?{x:pad+(aw+gap)/2,y,w:(aw-gap)/2,h:ah}:{x:pad,y:y+(ah+gap)/2,w:aw,h:(ah-gap)/2};
+  const s=drawPhoto(c,R1,20*u,T,'original');drawPhoto(c,R2,20*u,T,style);
+  pill(c,'Original',R1.x+16*u,R1.y+16*u,u);pill(c,styleName(style),R2.x+16*u,R2.y+16*u,u);drawScaleBar(c,R2,s,u,'br');
+}
+function layoutCard(c,W,H,u,T,st){
+  const pad=52*u,gap=16*u;c.fillStyle=rgba(T.bg,1);c.fillRect(0,0,W,H);
+  const wide=W/H>=1.3,hs=headStat(st),maxT=wide?(H/u<760?4:6):(H/W>1.5?6:4),tiles=[hs,...chipStats(st,maxT-1)].filter(Boolean);
+  if(wide){const pw=(W-3*pad)*0.5,R={x:pad,y:pad,w:pw,h:H-2*pad},s=drawPhoto(c,R,22*u,T,SH.style);drawScaleBar(c,R,s,u,'br');
+    const x0=2*pad+pw,cw=W-x0-pad;let y=header(c,x0,pad,cw,u,T,54)+30*u;const footY=H-pad;drawFooter(c,x0,W-pad,footY,u,T);
+    const rows=Math.ceil(tiles.length/2),th=Math.min(150*u,(footY-44*u-y-gap*(rows-1))/rows),tw=(cw-gap)/2;
+    tiles.forEach((t,i)=>statTile(c,x0+(i%2)*(tw+gap),y+Math.floor(i/2)*(th+gap),tw,th,t,u,T,i===0));return;}
+  let y=header(c,pad,pad,W-2*pad,u,T,60)+28*u;const footY=H-pad;drawFooter(c,pad,W-pad,footY,u,T);
+  const rows=Math.ceil(tiles.length/2),th=140*u,tw=(W-2*pad-gap)/2,tilesTop=footY-44*u-rows*th-(rows-1)*gap;
+  tiles.forEach((t,i)=>statTile(c,pad+(i%2)*(tw+gap),tilesTop+Math.floor(i/2)*(th+gap),tw,th,t,u,T,i===0));
+  const R={x:pad,y,w:W-2*pad,h:tilesTop-24*u-y},s=drawPhoto(c,R,22*u,T,SH.style);drawScaleBar(c,R,s,u,'br');
+}
+function chartData(type){
+  if(type==='comp'){const tot=I.roiN,pA=pore.objs.reduce((s,o)=>s+o.area,0),mA=pore.matN||0,gA=grain?grainSummary().gArea:0,oA=Math.max(0,tot-pA-mA-gA);
+    return {type,parts:(grain?[[PH().name,pA,'accent'],['Grains',gA,'grain'],['Matrix / cement',mA,'matrix'],['Other',oA,'other']]:[[PH().name,pA,'accent'],['Matrix / cement',mA,'matrix'],['Everything else',tot-pA-mA,'other']]).filter(p=>p[1]>0).map(p=>[p[0],p[1]/tot,p[2]]),title:'What the analysed area is made of'};}
+  if(type==='grain'){if(!grain||!grain.objs.length)return {msg:'Separate the grains in step 4 to show this chart'};const g=grainSummary(),objs=g.so;if(objs.length<3)return {msg:'Not enough grains for a chart'};
+    if(kUm()){const ph=objs.map(o=>phiOf(o.ecd)),bw=objs.length>250?0.25:0.5,lo=Math.floor(Math.min(...ph)/bw)*bw,hi=Math.ceil((Math.max(...ph)+1e-9)/bw)*bw,edges=[];for(let v=lo;v<=hi+1e-9;v+=bw)edges.push(+v.toFixed(4));if(edges.length<3)edges.push(hi+bw);
+      const vals=new Array(edges.length-1).fill(0);ph.forEach(v=>{let k=Math.floor((v-lo)/bw);k=Math.max(0,Math.min(vals.length-1,k));vals[k]++;});
+      const ticks=[];for(let t=Math.ceil(lo);t<=edges[edges.length-1];t++)ticks.push({v:t,t:`${t} φ`,t2:`${nf(1000*Math.pow(2,-t))} µm`});
+      return {type,edges,vals:vals.map(v=>v/ph.length*100),log:false,ticks,color:'grain',title:'Grain size distribution',xl:'grain size  ·  coarse ← → fine',note:g.fw?`${g.cnt.toLocaleString()} grains · ${sortClass(g.fw.sd)}`:`${g.cnt} grains`};}
+    return histLog(objs.map(o=>Lv(o.ecd)),objs.map(()=>1),'grain','Grain size distribution',`grain diameter (${uL()})`,`${g.cnt.toLocaleString()} grains`);}
+  const s=poreSummary();if(s.so.length<3)return {msg:'Not enough pores for a chart'};
+  return histLog(s.so.map(o=>Lv(o.ecd)),s.so.map(o=>o.area),'accent',P.phase==='pore'?'Pore size distribution':'Size distribution',`${P.phase==='pore'?'pore ':''}diameter (${uL()})  ·  share of ${P.phase==='pore'?'pore ':''}area`,`${s.count.toLocaleString()} ${P.phase==='pore'?'pores':'areas'} · half the area in ones over ${nf(Lv(s.d50))} ${uL()}`);
+}
+function histLog(vals,wts,color,title,xl,note){const lo=Math.min(...vals),hi=Math.max(...vals)*1.0001,B=Math.max(8,Math.min(16,Math.round(Math.sqrt(vals.length)))),a=Math.log10(lo),b=Math.log10(hi),edges=[];
+  for(let i=0;i<=B;i++)edges.push(Math.pow(10,a+(b-a)*i/B));const out=new Array(B).fill(0),tot=wts.reduce((x,y)=>x+y,0)||1;
+  vals.forEach((v,i)=>{let k=Math.floor((Math.log10(v)-a)/((b-a)||1)*B);k=Math.max(0,Math.min(B-1,k));out[k]+=wts[i];});
+  return {type:'hist',edges,vals:out.map(v=>v/tot*100),log:true,ticks:logT(edges[0],edges[B]).map(v=>({v,t:fmtV(v)})),color,title,xl,note};}
+function drawChartPanel(c,R,u,T,d){
+  c.fillStyle=T.panel;rrect(c,R.x,R.y,R.w,R.h,22*u);c.fill();
+  const col=k=>k==='accent'?T.accent:k==='grain'?T.grain:k==='matrix'?'#2fb67c':T.muted;
+  c.textAlign='left';c.textBaseline='alphabetic';
+  if(d.msg){c.font=`500 ${24*u}px ${SANS}`;c.fillStyle=T.muted;c.textAlign='center';c.fillText(d.msg,R.x+R.w/2,R.y+R.h/2);return;}
+  c.font=`600 ${26*u}px ${SANS}`;c.fillStyle=T.ink;c.fillText(d.title,R.x+28*u,R.y+48*u);
+  if(d.type==='comp'){const bx=R.x+28*u,bw=R.w-56*u,by=R.y+80*u,bh=Math.min(90*u,R.h*0.22);let x=bx;c.save();rrect(c,bx,by,bw,bh,14*u);c.clip();
+    d.parts.forEach(p=>{c.fillStyle=col(p[2]);c.fillRect(x,by,bw*p[1]+1,bh);x+=bw*p[1];});c.restore();
+    let y=by+bh+30*u;const rowH=Math.min(64*u,(R.y+R.h-24*u-y)/Math.max(1,d.parts.length));
+    d.parts.forEach(p=>{c.fillStyle=col(p[2]);rrect(c,bx,y+rowH*0.18,22*u,22*u,5*u);c.fill();c.fillStyle=T.ink;c.font=`500 ${Math.min(26*u,rowH*0.45)}px ${SANS}`;c.textAlign='left';c.textBaseline='top';c.fillText(p[0],bx+36*u,y+rowH*0.14);
+      c.font=`400 ${Math.min(44*u,rowH*0.75)}px ${SERIF}`;c.textAlign='right';c.fillText(`${(p[1]*100).toFixed(1)}%`,bx+bw,y);y+=rowH;});c.textBaseline='alphabetic';return;}
+  const two=d.ticks.some(t=>t.t2),x0=R.x+70*u,x1=R.x+R.w-30*u,y0=R.y+80*u,y1=R.y+R.h-(two?100:76)*u-(d.note?0:0);
+  const e0=d.edges[0],e1=d.edges[d.edges.length-1],fx=d.log?(v=>(Math.log10(v)-Math.log10(e0))/(Math.log10(e1)-Math.log10(e0))):(v=>(v-e0)/(e1-e0)),X=v=>x0+(x1-x0)*fx(v);
+  const ymax=niceNum(Math.max(...d.vals)*1.12)||1,Y=v=>y1-(y1-y0)*v/ymax;
+  c.font=`500 ${18*u}px ${SANS}`;c.textAlign='right';c.textBaseline='middle';
+  for(const t of linT(0,ymax,4)){c.strokeStyle=T.line;c.lineWidth=1.2*u;c.beginPath();c.moveTo(x0,Y(t));c.lineTo(x1,Y(t));c.stroke();c.fillStyle=T.muted;c.fillText(`${+t.toPrecision(3)}%`,x0-10*u,Y(t));}
+  c.fillStyle=col(d.color);for(let k=0;k<d.vals.length;k++){if(!d.vals[k])continue;const a=X(d.edges[k])+1.5*u,b=X(d.edges[k+1])-1.5*u,y=Y(d.vals[k]);rrect(c,a,y,Math.max(1,b-a),y1-y,Math.min(6*u,(b-a)/2));c.fill();c.fillRect(a,Math.max(y,y1-6*u),Math.max(1,b-a),Math.min(6*u,y1-y));}
+  c.textAlign='center';c.textBaseline='top';let last=-1e9;
+  for(const t of d.ticks){const x=X(t.v);if(x<x0-2||x>x1+2)continue;c.font=`500 ${18*u}px ${SANS}`;const w=Math.max(c.measureText(t.t).width,t.t2?c.measureText(t.t2).width:0);if(x-w/2<last+10*u)continue;
+    c.fillStyle=T.ink;c.fillText(t.t,x,y1+10*u);if(t.t2){c.fillStyle=T.muted;c.font=`400 ${16*u}px ${SANS}`;c.fillText(t.t2,x,y1+34*u);}last=x+w/2;}
+  c.font=`500 ${18*u}px ${SANS}`;c.fillStyle=T.muted;c.textBaseline='alphabetic';c.textAlign='left';const xl=d.xl+(d.note?`   ·   ${d.note}`:'');fitFont(c,xl,SANS,500,18*u,R.w-56*u,9);c.fillText(xl,R.x+28*u,R.y+R.h-22*u);
+}
+function layoutChart(c,W,H,u,T,st){
+  const pad=52*u;c.fillStyle=rgba(T.bg,1);c.fillRect(0,0,W,H);
+  const th=Math.min(230*u,W*0.24,H*0.28),Rt={x:W-pad-th,y:pad,w:th,h:th};drawPhoto(c,Rt,18*u,T,SH.style);
+  let y=header(c,pad,pad,W-3*pad-th,u,T,56)+(H/u<760?70:110)*u;
+  const hsz=drawHeadline(c,pad,Math.max(y,Rt.y+Rt.h-6*u),W-3*pad-th,u,T,st,H/u<760?96:120);
+  y=Math.max(y,Rt.y+Rt.h)+28*u;const footY=H-pad;drawFooter(c,pad,W-pad,footY,u,T);
+  drawChartPanel(c,{x:pad,y,w:W-2*pad,h:footY-44*u-y},u,T,chartData(SH.chart));
+}
+function renderCard(cv,fmt){
+  const F=SH_FMT[fmt],W=F.w,H=F.h,u=Math.min(W/1080,Math.sqrt(W*H)/1080),T=SH_THEME[SH.theme],c=cv.getContext('2d');
+  if(cv.width!==W||cv.height!==H){cv.width=W;cv.height=H;}
+  c.setTransform(1,0,0,1,0,0);c.globalAlpha=1;c.fillStyle=rgba(T.bg,1);c.fillRect(0,0,W,H);SH.rects=[];
+  if(!I){c.fillStyle=T.muted;c.font=`500 ${32*u}px ${SANS}`;c.textAlign='center';c.textBaseline='middle';c.fillText('Load an image first',W/2,H/2);return;}
+  const st=shareStats();
+  ({spot:layoutSpot,split:layoutSplit,card:layoutCard,chart:layoutChart})[SH.layout](c,W,H,u,T,st);
+}
+
+/* ---- caption ---- */
+function buildCaption(){
+  const st=shareStats(),L2=[];L2.push((SH.title||'Thin‑section analysis')+(SH.sub?` | ${SH.sub}`:''));L2.push('');
+  const keys=[SH.head,...ST_ORDER.filter(k=>k!==SH.head&&SH.stats.has(k))];for(const k of keys)if(st[k])L2.push(`• ${st[k].long}`);
+  L2.push('');L2.push(`Measured by image analysis of a ${P.phase==='gap'?'close‑up photo of grains':'thin‑section image'}: ${P.phase==='pore'?'pores picked out by colour':'phases picked out by colour'}${grain?', grains separated automatically':''}, sizes as equivalent circular diameters${umPerOrig?'':' (in pixels; no scale set)'}.`);
+  const url=appUrl();if(SH.link&&url)L2.push(`Try it on your own images: ${url}`);
+  if(SH.credit.trim())L2.push(`Image: ${SH.credit.trim()}`);
+  L2.push('');L2.push('#geology #petrography #thinsection #microscopy #sedimentology #porosity #geoscience #rocks');
+  return L2.join('\n');}
+
+/* ---- UI ---- */
+let shRaf=0;function shRender(){if(shRaf||step!=='share')return;shRaf=requestAnimationFrame(()=>{shRaf=0;renderCard($('#shCanvas'),SH.fmt);
+  const F=SH_FMT[SH.fmt];$('#shSize').textContent=`${F.name} · ${F.w} × ${F.h} px · ${F.hint}`;});}
+function fontsReady(){try{return Promise.all([document.fonts.load(`400 64px "Instrument Serif"`),document.fonts.load(`600 24px "Instrument Sans"`),document.fonts.load(`500 24px "Instrument Sans"`)]).then(()=>document.fonts.ready).catch(()=>{});}catch(e){return Promise.resolve();}}
+function syncShare(){
+  $('#shFmt').innerHTML=Object.entries(SH_FMT).map(([k,f])=>`<button class="fix${k===SH.fmt?' on':''}" data-shfmt="${k}"><i class="arbox" style="width:${f.w>=f.h?30:Math.round(30*f.w/f.h)}px;height:${f.w>=f.h?Math.round(30*f.h/f.w):30}px"></i><b>${f.name}</b><small>${f.hint}</small></button>`).join('');
+  $('#shLayout').innerHTML=Object.entries(SH_LAYOUT).map(([k,f])=>`<button class="fix${k===SH.layout?' on':''}" data-shlay="${k}"><b>${f.name}</b><small>${f.hint}</small></button>`).join('');
+  const st=shareStats();
+  $('#shHead').innerHTML=ST_ORDER.filter(k=>st[k]).map(k=>`<option value="${k}">${ST_NAMES[k]}: ${st[k].v}${st[k].unit}</option>`).join('');if(!st[SH.head])SH.head='phi';$('#shHead').value=SH.head;
+  $('#shStats').innerHTML=ST_ORDER.filter(k=>st[k]&&k!==SH.head).map(k=>`<label class="check"><input type="checkbox" data-st="${k}"${SH.stats.has(k)?' checked':''}> ${ST_NAMES[k]} <span class="opt">${st[k].v}${st[k].unit}</span></label>`).join('');
+  const max={spot:SH_FMT[SH.fmt].w/SH_FMT[SH.fmt].h>1.4?4:3,split:SH_FMT[SH.fmt].w/SH_FMT[SH.fmt].h>1.4?3:2,card:5,chart:0}[SH.layout];
+  $('#shMax').textContent=SH.layout==='chart'?'(shown in the caption; this design shows the headline and chart)':`(this design shows up to ${max}; extras go in the caption)`;
+  $('#shChartF').hidden=SH.layout!=='chart';$('#shStyle').value=SH.style;$('#shChart').value=SH.chart;
+  for(const [id,k] of [['#shTitle','title'],['#shSub','sub'],['#shCredit','credit']])if(document.activeElement!==$(id))$(id).value=SH[k];
+  $$('[data-shth]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.shth===SH.theme));$$('[data-shfit]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.shfit===SH.fit));
+  $('#shZoom').value=SH.z;$('#shZoomo').textContent=SH.z.toFixed(1)+'×';$('#shScale').checked=SH.scalebar;$('#shLink').checked=SH.link;
+  $('#shScaleNote').textContent=umPerOrig?'':'(set a scale in step 2 to show one)';
+  const notes=[];if(!grain)notes.push('Grains haven’t been separated yet, so grain numbers and the grain chart are missing. Visit step 4 to add them.');else if(grain.stale)notes.push('Pores changed after the grains were separated. Visit step 4 to update the grain numbers.');
+  if(!umPerOrig)notes.push('No scale is set, so sizes are in pixels and there’s no scale bar. Set one in step 2 for micrometres.');
+  $('#shStatus').hidden=!notes.length;$('#shStatus').textContent=notes.join(' ');
+  $('#shShare').hidden=!(navigator.share&&navigator.canShare);
+  if(!SH.capEdited)$('#shCaption').value=buildCaption();
+}
+function openShare(){if(!I)return;
+  if(SH.forImage!==I){SH.forImage=I;SH.title=defaultTitle();SH.sub='';SH.cx=SH.cy=null;SH.z=1;SH.capEdited=false;SH.style=grain?'outlines':'pores';}
+  syncShare();shRender();fontsReady().then(()=>shRender());}
+function shChanged(rebuild){if(rebuild)syncShare();else if(!SH.capEdited)$('#shCaption').value=buildCaption();shRender();}
+document.addEventListener('click',e=>{
+  let b=e.target.closest('[data-shfmt]');if(b){SH.fmt=b.dataset.shfmt;shChanged(true);return;}
+  b=e.target.closest('[data-shlay]');if(b){SH.layout=b.dataset.shlay;if(b.dataset.shlay==='split'&&SH.style==='original')SH.style='pores';shChanged(true);return;}
+  b=e.target.closest('[data-shth]');if(b){SH.theme=b.dataset.shth;shChanged(true);return;}
+  b=e.target.closest('[data-shfit]');if(b){SH.fit=b.dataset.shfit;shChanged(true);return;}});
+$('#shStats').addEventListener('change',e=>{const k=e.target.dataset.st;if(!k)return;if(e.target.checked)SH.stats.add(k);else SH.stats.delete(k);shChanged(false);});
+$('#shHead').onchange=e=>{SH.head=e.target.value;shChanged(true);};
+$('#shStyle').onchange=e=>{SH.style=e.target.value;shChanged(false);};
+$('#shChart').onchange=e=>{SH.chart=e.target.value;shChanged(false);};
+for(const [id,k] of [['#shTitle','title'],['#shSub','sub'],['#shCredit','credit']])$(id).addEventListener('input',e=>{SH[k]=e.target.value;shChanged(false);});
+$('#shZoom').addEventListener('input',e=>{SH.z=parseFloat(e.target.value);$('#shZoomo').textContent=SH.z.toFixed(1)+'×';shRender();});
+$('#shReset').onclick=()=>{SH.z=1;SH.cx=SH.cy=null;shChanged(true);};
+$('#shScale').onchange=e=>{SH.scalebar=e.target.checked;shRender();};
+$('#shLink').onchange=e=>{SH.link=e.target.checked;shChanged(false);};
+$('#shCaption').addEventListener('input',()=>{SH.capEdited=true;});
+$('#shRecap').onclick=()=>{SH.capEdited=false;$('#shCaption').value=buildCaption();toast('Caption rewritten from your results');};
+$('#shCopy').onclick=()=>copyText($('#shCaption').value,'Caption copied');
+// drag, wheel and pinch on the preview reposition and zoom the photo
+{const cv=$('#shCanvas'),pts2=new Map();let pinch=0;
+  const k=()=>cv.width/(cv.getBoundingClientRect().width||1),rs=()=>SH.rects[0]?SH.rects[0].s:1;
+  cv.addEventListener('pointerdown',e=>{cv.setPointerCapture(e.pointerId);pts2.set(e.pointerId,{x:e.clientX,y:e.clientY});if(pts2.size===2){const [a,b]=[...pts2.values()];pinch=Math.hypot(a.x-b.x,a.y-b.y);}});
+  cv.addEventListener('pointermove',e=>{const p=pts2.get(e.pointerId);if(!p)return;
+    if(pts2.size===2){pts2.set(e.pointerId,{x:e.clientX,y:e.clientY});const [a,b]=[...pts2.values()],d=Math.hypot(a.x-b.x,a.y-b.y);if(pinch>0){SH.z=Math.max(1,Math.min(12,SH.z*d/pinch));$('#shZoom').value=SH.z;$('#shZoomo').textContent=SH.z.toFixed(1)+'×';}pinch=d;shRender();return;}
+    if(SH.cx==null)return;const f=k()/rs();SH.cx-=(e.clientX-p.x)*f;SH.cy-=(e.clientY-p.y)*f;
+    const rw=roi.x1-roi.x0,rh=roi.y1-roi.y0;SH.cx=Math.max(roi.x0,Math.min(roi.x0+rw,SH.cx));SH.cy=Math.max(roi.y0,Math.min(roi.y0+rh,SH.cy));
+    pts2.set(e.pointerId,{x:e.clientX,y:e.clientY});shRender();});
+  const up=e=>{pts2.delete(e.pointerId);if(pts2.size<2)pinch=0;};cv.addEventListener('pointerup',up);cv.addEventListener('pointercancel',up);
+  cv.addEventListener('wheel',e=>{e.preventDefault();SH.z=Math.max(1,Math.min(12,SH.z*Math.exp(-e.deltaY*0.0015)));$('#shZoom').value=SH.z;$('#shZoomo').textContent=SH.z.toFixed(1)+'×';shRender();},{passive:false});}
+const shSlug=()=>((SH.title||'thin-section').toLowerCase().replace(/[^\w]+/g,'-').replace(/^-|-$/g,'')||'thin-section');
+async function cardBlob(fmt){await fontsReady();const cv=document.createElement('canvas');renderCard(cv,fmt);return new Promise(r=>cv.toBlob(r,'image/png'));}
+$('#shSave').onclick=async()=>{if(!I)return;const b=await cardBlob(SH.fmt);if(b)save(`${shSlug()}_${SH.fmt}.png`,b);};
+$('#shAll').onclick=async()=>{if(!I)return;for(const f of Object.keys(SH_FMT)){const b=await cardBlob(f);if(b)await save(`${shSlug()}_${f}.png`,b);await new Promise(r=>setTimeout(r,500));}toast('All five sizes saved');};
+$('#shShare').onclick=async()=>{if(!I)return;const b=await cardBlob(SH.fmt);if(!b)return;const file=new File([b],`${shSlug()}_${SH.fmt}.png`,{type:'image/png'}),cap=$('#shCaption').value;
+  try{if(navigator.canShare&&navigator.canShare({files:[file]})){try{await navigator.clipboard.writeText(cap);}catch(e){}await navigator.share({files:[file],title:SH.title,text:cap});toast('Shared. The caption was also copied, in case the app leaves it out.');}
+    else{save(file.name,b);toast('Sharing files isn’t supported in this browser, so the image was saved instead');}}catch(e){if(e&&e.name!=='AbortError')toast('Sharing didn’t work here, so try Save image instead');}};
 
 /* =============== start =============== */
 resize();syncUI();goStep('image');

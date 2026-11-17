@@ -433,6 +433,7 @@ input[type=text]:focus-visible,textarea:focus-visible{outline:2px solid var(--ep
           <button class="fix nb" data-fix="notebook4" style="width:100%;margin-bottom:8px"><b>Separate like the Python notebook</b><small>Erode &amp; dilate with disk(r), 4‑connected labels, every piece kept</small></button>
           <div class="seg" role="group" aria-label="Separation method" style="margin-bottom:6px">
             <button data-gm="watershed" aria-pressed="true">Automatic split</button>
+            <button data-gm="edges">Touching grains</button>
             <button data-gm="opening">Erode &amp; dilate</button>
           </div>
           <div class="sbox" id="openBox" hidden>
@@ -593,6 +594,7 @@ input[type=text]:focus-visible,textarea:focus-visible{outline:2px solid var(--ep
     <h2>Methods and caveats</h2>
     <p><b>Pores.</b> In “Tap examples” each pixel is converted to CIELAB colour and assigned to whichever examples, pore or grain, it is closest to; the balance slider shifts that boundary. Pores are grouped by 8‑connectivity. Size and shape come from each object’s pixels: equivalent circular diameter (ECD) from area, axes from the moment ellipse, Feret diameters and solidity from the convex hull, and circularity as 4πA/P² with a corner‑corrected perimeter.</p>
     <p><b>Grains.</b> Grain‑forming pixels (not pore, not matrix or cement) are first split into many small regions by a watershed on the smoothed distance map, steered by an edge map that combines colour edges with thin dark contact lines. Neighbouring regions are then merged step by step, but only where the contact between them is wide relative to the smaller region, carries no visible edge, and joins similar colours. Leftover fragments join the neighbour they share the longest contact with. Small pores enclosed inside a grain are counted as part of it when most of the pore space is open; for packed loose grains, where enclosed gaps are real pore space, they are left alone. Tested on synthetic sections with known grains, 87–96% of grains are recovered with an overlap of 70% or more when contacts or colour differences are visible, and about 70% when touching grains look identical.</p>
+    <p><b>Touching grains.</b> For packed grains (sand photos, grain mounts, tight sandstones), where grains touch over most of their outline, the grain area is split along visible boundaries: grain cores are pixels that are neither on a colour or brightness edge nor locally dark, each core seeds one grain, and a watershed on edge strength grows the grains out to their boundaries. The app picks this automatically when most of the grain area is one connected mass.</p>
     <p><b>Matching the Python notebook.</b> “Use the same method as the Python notebook” runs K‑means on RGB with k‑means++ seeding, gives every pixel its group’s role, then erodes and dilates with a disk (radius in original‑image pixels) and labels pieces with 4‑connectivity, keeping every piece. Checked against scikit‑learn, scipy and scikit‑image on six test images at full resolution, grain counts agree to within about 1% for five of them (for example 630 against 629 pieces) and within 10% for the sixth, where K‑means settles slightly differently. Results only match when both work on the same pixels: browsers can’t hold a whole rock‑slab image in memory, so large images are analysed at reduced size unless you analyse an area at full resolution.</p>
     <p><b>Colour groups and erode &amp; dilate.</b> “Colour groups” clusters every pixel into K groups with K‑means (in perceptual CIELAB colour, or raw RGB), and groups given the same role are merged into one phase. “Erode &amp; dilate” is a morphological opening with a disk of radius r, computed exactly from distance maps, followed by 8‑connected labelling; it cuts bridges thinner than about 2r, removes grains narrower than 2r, and trims corners unless trimmed edges are given back. The region table lists area, axes, centroid and bounding box for every object.</p>
     <p><b>Image types.</b> The first guess clusters the image’s colours and picks the blue epoxy phase if there is one, otherwise the darkest phase. Dark‑epoxy and crossed‑polarised images work, but grains at extinction look like pores, and loose‑grain photos measure the shadowed gaps between grains rather than true porosity. “Even out uneven lighting” removes broad brightness gradients before classification.</p>
@@ -611,7 +613,7 @@ let MAXD=1600;const PORE_RGB=[214,36,127],GRAIN_RGB=[255,205,0];
 const PHASES={pore:{name:'Porosity',lower:'porosity'},matrix:{name:'Cement / matrix',lower:'cement / matrix'},gap:{name:'Space between grains',lower:'space between grains'}};
 const PH=()=>PHASES[P.phase]||PHASES.pore;
 const P={mode:'samples',bias:0,tol:25,hueC:215,hueW:60,satMin:0.35,valMin:0.15,grayMax:60,grayInv:false,K:4,clDirect:false,clSpace:'lab',phase:'pore',flatten:false,minSize:6,fillHoles:20,smooth:false,denoise:true,fillTol:35,edgeEx:true,
-  grainR:16,fillIntra:true,fillAlways:false,gMethod:'watershed',openR:6,openRestore:false,openConn:4,openBorder:true,openMin:0,kInit:'quantile',neck:90,edgeW:50,darkCut:0};
+  grainR:16,fillIntra:true,fillAlways:false,gMethod:'watershed',gMethodUser:false,eG:0.35,eMark:0.7,openR:6,openRestore:false,openConn:4,openBorder:true,openMin:0,kInit:'quantile',neck:90,edgeW:50,darkCut:0};
 let I=null,pore=null,grain=null,umPerOrig=0,roi=null;
 const samples={pore:[],solid:[],matrix:[]};
 let step='image',tool='select',sel=null,mergeFirst=null;
@@ -933,7 +935,9 @@ function gradient(){
 }
 function segmentGrains(){
   if(!I)return;
+  if(!P.gMethodUser){const {solid,sc}=grainSolid();if(sc){const share=solidConnectedShare(solid);P.gMethod=share>0.35?'edges':'watershed';P.gAutoWhy=share;syncUI();}}
   if(P.gMethod==='opening'){segmentOpening();return;}
+  if(P.gMethod==='edges'){segmentEdges();return;}
   const {W,H,n,L8,roiMask}=I,mask=pore.mask,mat=pore.matrix,edgeW=P.edgeW/100,neck=P.neck/100;
   const solid=new Uint8Array(n);let bg=0,sc=0;
   for(let i=0;i<n;i++){const s=roiMask[i]&&!mask[i]&&!mat[i]&&L8[i]>P.darkCut;solid[i]=s?1:0;if(s)sc++;else if(roiMask[i])bg++;}
@@ -1031,6 +1035,65 @@ function segmentGrains(){
   busy(false);refreshAll();
 }
 
+
+/* Touching grains (packed sand photos, grain mounts, tight sandstones): split the grain area along visible
+   boundaries instead of relying on pore space between grains.
+   1. grain "cores" = grain pixels that are not on a colour/brightness edge and not locally dark;
+   2. one marker per core (local maxima of the core distance map, spaced by the typical grain radius);
+   3. watershed on edge strength from those markers, restricted to the grain area;
+   4. specks join the neighbour they share most boundary with. */
+function solidConnectedShare(solid){const {W,H,n}=I,lab=new Int32Array(n),cc=labelCC(solid,W,H,lab,I.par,true);let mx=0,tot=0;for(let l=1;l<=cc.n;l++){tot+=cc.area[l];if(cc.area[l]>mx)mx=cc.area[l];}return tot?mx/tot:0;}
+function segmentEdges(){
+  const {W,H,n,roiMask}=I,{solid,sc}=grainSolid();
+  if(!sc){toast('Nothing is left as grain. Go back to step 3 and mark some colours as grain.');busy(false);return;}
+  const [La,Aa,Ba]=labArrays(),bl=a=>boxBlur(boxBlur(a,W,H,new Float32Array(n)),W,H,new Float32Array(n));
+  const fL=bl(La),fA=bl(Aa),fB=bl(Ba);
+  // local contrast: how much brighter than its surroundings each pixel is
+  const S=Math.max(8,Math.round(Math.max(W,H)/45)),m=blurBig(blurBig(fL,W,H,S),W,H,S),dev=new Float32Array(n);for(let i=0;i<n;i++){const d=fL[i]-m[i];dev[i]=d*d;}
+  const sd=blurBig(blurBig(dev,W,H,S),W,H,S),z=new Float32Array(n);for(let i=0;i<n;i++)z[i]=(fL[i]-m[i])/(Math.sqrt(sd[i])+0.3);
+  // edge strength from all three colour channels
+  const g=new Float32Array(n),sob=(ch,i)=>{const gx=(ch[i-W+1]+2*ch[i+1]+ch[i+W+1])-(ch[i-W-1]+2*ch[i-1]+ch[i+W-1]),gy=(ch[i+W-1]+2*ch[i+W]+ch[i+W+1])-(ch[i-W-1]+2*ch[i-W]+ch[i-W+1]);return gx*gx+gy*gy;};
+  for(let y=1;y<H-1;y++){const r=y*W;for(let x=1;x<W-1;x++){const i=r+x;g[i]=Math.sqrt(sob(fL,i)+sob(fA,i)+sob(fB,i));}}
+  {let mx=0;for(let i=0;i<n;i++)if(g[i]>mx)mx=g[i];const hist=new Uint32Array(1024),sc2=1023/(mx||1);let cnt=0;for(let i=0;i<n;i++)if(solid[i]){hist[Math.min(1023,(g[i]*sc2)|0)]++;cnt++;}
+   let acc=0,p98=mx;for(let b=0;b<1024;b++){acc+=hist[b];if(acc>=cnt*0.98){p98=(b+1)/1024*mx;break;}}const inv=1/(p98||1);for(let i=0;i<n;i++)g[i]=Math.min(1,g[i]*inv);}
+  // 1. cores
+  const gT=P.eG,zT=-0.3,core0=new Uint8Array(n);for(let i=0;i<n;i++)core0[i]=solid[i]&&g[i]<gT&&z[i]>zT?1:0;
+  const core=new Uint8Array(n),tmp=new Uint8Array(n);   // 3×3 opening removes one‑pixel bridges and specks
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){const i=y*W+x;let v=core0[i];if(v)for(let dy=-1;dy<=1&&v;dy++)for(let dx=-1;dx<=1;dx++){const xx=x+dx,yy=y+dy;if(xx<0||yy<0||xx>=W||yy>=H||!core0[yy*W+xx]){v=0;break;}}tmp[i]=v;}
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){const i=y*W+x;if(!core0[i])continue;let v=0;for(let dy=-1;dy<=1&&!v;dy++)for(let dx=-1;dx<=1;dx++){const xx=x+dx,yy=y+dy;if(xx>=0&&yy>=0&&xx<W&&yy<H&&tmp[yy*W+xx]){v=1;break;}}core[i]=v;}
+  const cl=new Int32Array(n),cc=labelCC(core,W,H,cl,I.par,true);
+  if(!P.grainRUser){const ar=[];for(let l=1;l<=cc.n;l++)if(cc.area[l]>8)ar.push(cc.area[l]);ar.sort((a,b)=>a-b);P.grainR=ar.length?Math.max(3,Math.min(80,Math.round(Math.sqrt(ar[ar.length>>1]/Math.PI)))):6;}
+  const R=P.grainR;
+  // 2. markers
+  const dt=boxBlur(edt(core,W,H),W,H,new Float32Array(n)),mx=maxFilter(dt,W,H,Math.max(2,Math.round(R*P.eMark))),mk=new Uint8Array(n);
+  for(let i=0;i<n;i++)mk[i]=core[i]&&dt[i]>=1&&dt[i]>=mx[i]-1e-4?1:0;
+  const lab=new Int32Array(n),mc=labelCC(mk,W,H,lab,I.par);
+  // 3. watershed on edge strength (lowest first), slightly favouring grain centres
+  let dmax=0;for(let i=0;i<n;i++)if(dt[i]>dmax)dmax=dt[i];const Q=256,qv=new Int32Array(n);
+  for(let i=0;i<n;i++)if(solid[i]){const e=g[i]-0.15*dt[i]/(dmax||1);qv[i]=Math.max(0,Math.min(Q-1,Math.round((e+0.15)/1.15*(Q-1))));}
+  const head=new Int32Array(Q).fill(-1),nxt=new Int32Array(n),push=(i,b)=>{nxt[i]=head[b];head[b]=i;};
+  for(let i=0;i<n;i++)if(lab[i])push(i,qv[i]);
+  for(let cur=0;cur<Q;cur++){while(head[cur]!==-1){const i=head[cur];head[cur]=nxt[i];const x=i%W,l=lab[i];
+    for(const j of [x>0?i-1:-1,x<W-1?i+1:-1,i>=W?i-W:-1,i<n-W?i+W:-1]){if(j<0||!solid[j]||lab[j])continue;lab[j]=l;push(j,Math.max(cur,qv[j]));}}}
+  let M=mc.n;{const rest=new Uint8Array(n);let any=0;for(let i=0;i<n;i++)if(solid[i]&&!lab[i]){rest[i]=1;any=1;}
+    if(any){const rl=new Int32Array(n),rc=labelCC(rest,W,H,rl,I.par);for(let i=0;i<n;i++)if(rl[i])lab[i]=M+rl[i];M+=rc.n;}}
+  // 4. specks join the neighbour with the longest shared boundary
+  const area=new Float64Array(M+1),uf=new Int32Array(M+1);for(let l=0;l<=M;l++)uf[l]=l;const find=x=>{while(uf[x]!==x){uf[x]=uf[uf[x]];x=uf[x];}return x;};
+  const pairs=new Map(),K=M+1;
+  for(let i=0;i<n;i++){const a=lab[i];if(!a)continue;area[a]++;const x=i%W;for(const j of [x<W-1?i+1:-1,i<n-W?i+W:-1]){if(j<0)continue;const b=lab[j];if(b&&b!==a){const key=a<b?a*K+b:b*K+a;pairs.set(key,(pairs.get(key)||0)+1);}}}
+  const minA=Math.max(P.minSize,Math.round(Math.PI*R*R*0.25));
+  for(let pass=0;pass<3;pass++){const adj=new Map();
+    for(const [key,c] of pairs){const a=find(Math.floor(key/K)),b=find(key%K);if(a===b)continue;for(const [u,v] of [[a,b],[b,a]]){let mm=adj.get(u);if(!mm){mm=new Map();adj.set(u,mm);}mm.set(v,(mm.get(v)||0)+c);}}
+    const small=[];for(let l=1;l<=M;l++)if(find(l)===l&&area[l]>0&&area[l]<minA)small.push(l);if(!small.length)break;small.sort((a,b)=>area[a]-area[b]);let ch=0;
+    for(const r of small){if(find(r)!==r||area[r]>=minA)continue;const mm=adj.get(r);if(!mm)continue;let best=0,bc=0;for(const [v,c] of mm){const fv=find(v);if(fv!==r&&c>bc){bc=c;best=fv;}}if(best){uf[r]=best;area[best]+=area[r];ch++;}}
+    if(!ch)break;}
+  const remap=new Int32Array(M+1);let k=0;for(let l=1;l<=M;l++){const r=find(l);if(r===l&&area[l]>=minA)remap[l]=++k;}
+  for(let i=0;i<n;i++)if(lab[i])lab[i]=remap[find(lab[i])];
+  grain={lab,n:k,objs:[],excluded:new Set(),stale:false};
+  remeasureGrains();
+  grainUndo=[];if(sel&&sel.kind==='grain')sel=null;mergeFirst=null;if(hl&&hl.kind==='grain'){hl=null;hlCanvas=null;}
+  busy(false);refreshAll();
+}
 function grainSolid(){const {n,L8,roiMask}=I,mask=pore.mask,mat=pore.matrix,solid=new Uint8Array(n);let sc=0;
   for(let i=0;i<n;i++){const v=roiMask[i]&&!mask[i]&&!mat[i]&&L8[i]>P.darkCut;solid[i]=v?1:0;sc+=solid[i];}return {solid,sc};}
 /* opening = erosion then dilation with a disk of radius r, using exact distance maps; then 8-connected labelling */
@@ -1239,7 +1302,7 @@ function renderPoreReadout(){const s=poreSummary();$('#phi').innerHTML=`${s.phi.
 function renderGrainStatus(){
   ['grainR','neck','edgeW','darkCut'].forEach(k=>{$('#'+k).value=P[k];});
   $('#grainRo').textContent=(P.grainRUser?'':'auto, ')+P.grainR+' px'+(kUm()?` (${nf(Lv(P.grainR))} µm)`:'');$('#necko').textContent=P.neck+'%';$('#edgeWo').textContent=P.edgeW?P.edgeW+'%':'off';$('#darkCuto').textContent=P.darkCut||'off';
-  $('#grainStatus').textContent=grain?`${P.gMethod==='opening'?`Erode & dilate, r = ${P.openR} original px, ${P.openConn}‑connected: `:''}${grain.objs.length} grains found${grain.excluded.size?`, ${grain.excluded.size} excluded`:''}${grain.stale?'. Pores have changed; grains will update when you return here.':'.'}`:'Grains are separated when you open this step.';
+  $('#grainStatus').textContent=grain?`${P.gMethod==='opening'?`Erode & dilate, r = ${P.openR} original px, ${P.openConn}‑connected: `:P.gMethod==='edges'?`Touching grains${P.gMethodUser?'':' (chosen automatically because the grains touch)'}: `:''}${grain.objs.length} grains found${grain.excluded.size?`, ${grain.excluded.size} excluded`:''}${grain.stale?'. Pores have changed; grains will update when you return here.':'.'}`:'Grains are separated when you open this step.';
   $('#staleWarn').hidden=!(grain&&grain.stale);
 }
 function renderKeyStats(){
@@ -1624,7 +1687,7 @@ $$('[data-cld]').forEach(b=>b.onclick=()=>{P.clDirect=b.dataset.cld==='1';if(!I)
 $('#kInit').onchange=e=>{P.kInit=e.target.value;if(!I)return;busy(true,'Grouping colours…');setTimeout(()=>{autoSuggest(true);syncUI();runDetect();},20);};
 $('#clSpace').onchange=e=>{P.clSpace=e.target.value;if(!I)return;busy(true,'Grouping colours…');setTimeout(()=>{autoSuggest(true);syncUI();runDetect();},20);};
 $('#mapBtn').onclick=()=>{L.clmap=!L.clmap;$('#mapBtn').setAttribute('aria-pressed',L.clmap);$('#mapBtn').textContent=L.clmap?'Hide group map':'Show group map';requestDraw();};
-$$('[data-gm]').forEach(b=>b.onclick=()=>{P.gMethod=b.dataset.gm;syncUI();if(I&&pore){busy(true,'Separating grains…');setTimeout(segmentGrains,30);}});
+$$('[data-gm]').forEach(b=>b.onclick=()=>{P.gMethod=b.dataset.gm;P.gMethodUser=true;syncUI();if(I&&pore){busy(true,'Separating grains…');setTimeout(segmentGrains,30);}});
 let oT=0;$('#openR').addEventListener('input',e=>{P.openR=parseFloat(e.target.value);syncUI();$$('.rad').forEach(b=>b.classList.toggle('on',+b.dataset.rad===P.openR));if(!I)return;busy(true,'Separating grains…');clearTimeout(oT);oT=setTimeout(segmentGrains,300);});
 $('#openConn').onchange=e=>{P.openConn=+e.target.value;if(I){busy(true,'Separating grains…');setTimeout(segmentGrains,30);}};
 $('#openBorder').onchange=e=>{P.openBorder=e.target.checked;if(I){busy(true,'Separating grains…');setTimeout(segmentGrains,30);}};
@@ -1765,7 +1828,7 @@ $('#ovBtn').onclick=()=>{L.hide=!L.hide;$('#ovBtn').textContent=L.hide?'Show ove
 $('#emptyLoad').onclick=()=>$('#file').click();
 $('#emptySample').onclick=()=>makeSample();
 const gHist=[];
-const gSnap=()=>({openConn:P.openConn,openBorder:P.openBorder,openMin:P.openMin,openR:P.openR,openRestore:P.openRestore,gMethod:P.gMethod,neck:P.neck,edgeW:P.edgeW,grainR:P.grainR,grainRUser:P.grainRUser,fillIntra:P.fillIntra,fillAlways:P.fillAlways,darkCut:P.darkCut});
+const gSnap=()=>({gMethodUser:P.gMethodUser,eG:P.eG,eMark:P.eMark,openConn:P.openConn,openBorder:P.openBorder,openMin:P.openMin,openR:P.openR,openRestore:P.openRestore,gMethod:P.gMethod,neck:P.neck,edgeW:P.edgeW,grainR:P.grainR,grainRUser:P.grainRUser,fillIntra:P.fillIntra,fillAlways:P.fillAlways,darkCut:P.darkCut});
 function adjustGrains(ch,msg){gHist.push(gSnap());Object.assign(P,ch);syncUI();renderGrainStatus();busy(true,'Separating grains…');setTimeout(()=>{segmentGrains();toast(msg);},30);}
 $('#fixUndo').onclick=()=>{const s2=gHist.pop();if(!s2){toast('No adjustment to undo');return;}Object.assign(P,s2);syncUI();renderGrainStatus();busy(true,'Separating grains…');setTimeout(()=>{segmentGrains();toast('Previous settings restored');},30);};
 function ensureSamples(){if(P.mode!=='samples'){if(P.mode==='clusters'&&I.clusters)applyClusters(false);else{P.mode='samples';if(!samples.pore.length){autoSuggest();applyClusters(false);}}syncUI();runDetect();}}
@@ -1781,9 +1844,9 @@ function showScaleBox(which){for(const [k,id] of [['bar','#boxBar'],['dims','#bo
 const FIX={
   roi:()=>{setTool('roi');toast('Tap two opposite corners on the image');},
   flatten:()=>{P.flatten=!P.flatten;syncUI();busy(true);setTimeout(()=>{refreshSampleLabs();if(P.mode==='clusters')autoSuggest(true);runDetect();toast(P.flatten?'Lighting evened out':'Lighting correction off');},20);},
-  notebook:()=>{P.clSpace='rgb';P.kInit='kpp';P.clDirect=true;P.gMethod='opening';P.openConn=4;P.openBorder=true;P.openMin=0;P.openRestore=false;syncUI();busy(true,'Grouping colours like the notebook…');
+  notebook:()=>{P.clSpace='rgb';P.kInit='kpp';P.clDirect=true;P.gMethod='opening';P.gMethodUser=true;P.openConn=4;P.openBorder=true;P.openMin=0;P.openRestore=false;syncUI();busy(true,'Grouping colours like the notebook…');
     setTimeout(()=>{autoSuggest(true);P.mode='clusters';syncUI();renderClusters();runDetect();toast(`Notebook method: ${P.K} K‑means groups on RGB. Give each group its role (the notebook merged the grain groups), then go to step 4.`);},30);},
-  notebook4:()=>{adjustGrains({gMethod:'opening',openConn:4,openBorder:true,openMin:0,openRestore:false},`Erode & dilate like the notebook: disk(${P.openR}) on original pixels, 4‑connected labels.`);},
+  notebook4:()=>{adjustGrains({gMethod:'opening',gMethodUser:true,openConn:4,openBorder:true,openMin:0,openRestore:false},`Erode & dilate like the notebook: disk(${P.openR}) on original pixels, 4‑connected labels.`);},
   bigimg:()=>{setTool('roi');toast('Draw the area to analyse, then choose “Analyse the drawn area at full resolution” under More options');document.querySelector('details.fine').open=true;},
   fine:()=>{const r=$('#res');r.value=r.value==='2400'?'1600':'2400';r.onchange({target:r});},
   scalebar:()=>{showScaleBox('bar');setTool('calib');},
@@ -1800,12 +1863,12 @@ const FIX={
   fixOne:()=>setTool('editPore'),
   restart:()=>$('#autoBtn').click(),
   grainsOk:()=>goStep('results'),
-  joined:()=>P.gMethod==='opening'?adjustGrains({openR:Math.min(40,+(P.openR*1.3+0.5).toFixed(1))},'Larger disk: thicker bridges are cut.'):adjustGrains({neck:Math.min(98,P.neck+4),edgeW:Math.min(100,P.edgeW+15)},'Splitting more readily. Tap again if grains are still joined.'),
-  cut:()=>P.gMethod==='opening'?adjustGrains({openR:Math.max(0.5,+(P.openR/1.3).toFixed(1)),openRestore:true},'Smaller disk, and trimmed edges given back to the grains.'):adjustGrains({neck:Math.max(40,P.neck-6),edgeW:Math.max(0,P.edgeW-15),grainRUser:true,grainR:Math.min(120,Math.round(P.grainR*1.25)+1)},'Splitting less readily. Tap again if grains are still cut.'),
-  small:()=>P.gMethod==='opening'?adjustGrains({openR:Math.max(0.5,+(P.openR/1.3).toFixed(1))},'Smaller disk: narrower grains survive.'):adjustGrains({grainRUser:true,grainR:Math.max(3,Math.round(P.grainR*0.75))},'Smaller grains allowed. Tap again for even smaller.'),
+  joined:()=>P.gMethod==='edges'?adjustGrains({eMark:Math.max(0.35,+(P.eMark-0.1).toFixed(2)),eG:Math.max(0.15,+(P.eG-0.04).toFixed(2))},'Splitting more readily along faint boundaries. Tap again if grains are still joined.'):P.gMethod==='opening'?adjustGrains({openR:Math.min(40,+(P.openR*1.3+0.5).toFixed(1))},'Larger disk: thicker bridges are cut.'):(P.neck>=94?adjustGrains({gMethod:'edges',gMethodUser:true},'Switched to the Touching grains method, which follows the boundaries between grains.'):adjustGrains({neck:Math.min(98,P.neck+4),edgeW:Math.min(100,P.edgeW+15)},'Splitting more readily. Tap again if grains are still joined.')),
+  cut:()=>P.gMethod==='edges'?adjustGrains({eMark:Math.min(1.4,+(P.eMark+0.12).toFixed(2)),eG:Math.min(0.7,+(P.eG+0.05).toFixed(2))},'Splitting less readily. Tap again if grains are still cut.'):P.gMethod==='opening'?adjustGrains({openR:Math.max(0.5,+(P.openR/1.3).toFixed(1)),openRestore:true},'Smaller disk, and trimmed edges given back to the grains.'):adjustGrains({neck:Math.max(40,P.neck-6),edgeW:Math.max(0,P.edgeW-15),grainRUser:true,grainR:Math.min(120,Math.round(P.grainR*1.25)+1)},'Splitting less readily. Tap again if grains are still cut.'),
+  small:()=>P.gMethod==='edges'?adjustGrains({grainRUser:true,grainR:Math.max(3,Math.round(P.grainR*0.75))},'Smaller grains allowed. Tap again for even smaller.'):P.gMethod==='opening'?adjustGrains({openR:Math.max(0.5,+(P.openR/1.3).toFixed(1))},'Smaller disk: narrower grains survive.'):adjustGrains({grainRUser:true,grainR:Math.max(3,Math.round(P.grainR*0.75))},'Smaller grains allowed. Tap again for even smaller.'),
   holes:()=>adjustGrains({fillIntra:true,fillAlways:true},'Holes inside grains now count as part of the grain.'),
   handGrains:()=>{$('#handTools').hidden=false;setTool('merge');},
-  resetGrains:()=>adjustGrains({neck:90,edgeW:50,grainRUser:false,fillIntra:true,fillAlways:false,darkCut:0},'Back to automatic settings.'),
+  resetGrains:()=>adjustGrains({gMethodUser:false,eG:0.35,eMark:0.7,neck:90,edgeW:50,grainRUser:false,fillIntra:true,fillAlways:false,darkCut:0},'Back to automatic settings.'),
   plots:()=>$('#dash').scrollIntoView({behavior:'smooth',block:'start'}),
   pointcount:()=>{setTool('points');toast('Point count shown on the image');},
   measure:()=>setTool('measure'),
